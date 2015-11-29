@@ -9,7 +9,7 @@ import:
     repo:    https://github.com/akutz/cobra
     vcs:     git
   - package: github.com/spf13/viper
-    ref:     0f9e044d014b09b8fd2765cec3e88f13bec56bf9
+    ref:     317ec73d0d7507658ee3be15866b445d6d921848
     repo:    https://github.com/akutz/viper.git
     vcs:     git
   - package: github.com/go-yaml/yaml
