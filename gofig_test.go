@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	log "github.com/Sirupsen/logrus"
+	"github.com/stretchr/testify/assert"
 	//jww "github.com/spf13/jwalterweatherman"
 )
 
@@ -55,7 +56,7 @@ func newConfigDirs(testName string, t *testing.T) (string, string) {
 }
 
 func assertConfigEqualToJSON(
-	c1 *Config, j2 string, t *testing.T) (*Config, *Config, bool) {
+	c1 Config, j2 string, t *testing.T) (Config, Config, bool) {
 	var err error
 	var j1 string
 	if j1, err = c1.ToJSON(); err != nil {
@@ -66,7 +67,7 @@ func assertConfigEqualToJSON(
 }
 
 func assertConfigEqualToJSONCompact(
-	c1 *Config, j2 string, t *testing.T) (*Config, *Config, bool) {
+	c1 Config, j2 string, t *testing.T) (Config, Config, bool) {
 	var err error
 	var j1 string
 	if j1, err = c1.ToJSONCompact(); err != nil {
@@ -77,7 +78,7 @@ func assertConfigEqualToJSONCompact(
 }
 
 func assertJSONEqual(
-	j1 string, j2 string, t *testing.T) (*Config, *Config, bool) {
+	j1 string, j2 string, t *testing.T) (Config, Config, bool) {
 
 	t.Logf("j1 - %s", j1)
 	t.Log("")
@@ -101,7 +102,7 @@ func assertJSONEqual(
 	return c1, c2, eq
 }
 
-func assertConfigsEqual(c1 *Config, c2 *Config, t *testing.T) bool {
+func assertConfigsEqual(c1 Config, c2 Config, t *testing.T) bool {
 
 	printConfig("c1", c1, t)
 	t.Log("")
@@ -432,6 +433,30 @@ func TestReadNilConfig(t *testing.T) {
 	}
 }
 
+func TestScope(t *testing.T) {
+	wipeEnv()
+	Register(testReg3())
+	c := New()
+	assert.True(t, c.IsSet("rexray.loglevel"))
+	assert.Equal(t, "warn", c.GetString("rexray.loglevel"))
+
+	if err := c.ReadConfig(bytes.NewReader(yamlConfig1)); err != nil {
+		t.Fatal(err)
+	}
+
+	assert.Equal(t, "error", c.GetString("rexray.loglevel"))
+
+	c.Set("loglevel", "verbose")
+
+	assert.True(t, c.IsSet("loglevel"))
+	assert.Equal(t, "verbose", c.GetString("loglevel"))
+
+	sc := c.Scope("rexray")
+
+	assert.True(t, sc.IsSet("loglevel"))
+	assert.Equal(t, "error", sc.GetString("loglevel"))
+}
+
 func wipeEnv() {
 	evs := os.Environ()
 	for _, v := range evs {
@@ -440,7 +465,7 @@ func wipeEnv() {
 	}
 }
 
-func printKeys(title string, c *Config, t *testing.T) {
+func printKeys(title string, c Config, t *testing.T) {
 	for _, k := range c.AllKeys() {
 		if title == "" {
 			t.Logf(k)
@@ -450,8 +475,9 @@ func printKeys(title string, c *Config, t *testing.T) {
 	}
 }
 
-func printViperKeys(title string, c *Config, t *testing.T) {
-	for _, k := range c.v.AllKeys() {
+func printViperKeys(title string, c Config, t *testing.T) {
+	tc := c.(*config)
+	for _, k := range tc.v.AllKeys() {
 		if title == "" {
 			t.Logf(k)
 		} else {
@@ -460,7 +486,7 @@ func printViperKeys(title string, c *Config, t *testing.T) {
 	}
 }
 
-func printConfig(title string, c *Config, t *testing.T) {
+func printConfig(title string, c Config, t *testing.T) {
 	for _, k := range c.AllKeys() {
 		if title == "" {
 			t.Logf("%s=%v", k, c.Get(k))
@@ -470,14 +496,14 @@ func printConfig(title string, c *Config, t *testing.T) {
 	}
 }
 
-func assertString(t *testing.T, c *Config, key, expected string) {
+func assertString(t *testing.T, c Config, key, expected string) {
 	v := c.GetString(key)
 	if v != expected {
 		t.Fatalf("%s != %s; == %v", key, expected, v)
 	}
 }
 
-func assertStorageDrivers(t *testing.T, c *Config) {
+func assertStorageDrivers(t *testing.T, c Config) {
 	sd := c.GetStringSlice("rexray.storageDrivers")
 	if sd == nil {
 		t.Fatalf("storageDrivers == nil")
@@ -496,7 +522,7 @@ func assertStorageDrivers(t *testing.T, c *Config) {
 	}
 }
 
-func assertOsDrivers1(t *testing.T, c *Config) {
+func assertOsDrivers1(t *testing.T, c Config) {
 	od := c.GetStringSlice("rexray.osDrivers")
 	if od == nil {
 		t.Fatalf("osDrivers == nil")
@@ -509,7 +535,7 @@ func assertOsDrivers1(t *testing.T, c *Config) {
 	}
 }
 
-func assertOsDrivers2(t *testing.T, c *Config) {
+func assertOsDrivers2(t *testing.T, c Config) {
 	od := c.GetStringSlice("rexray.osDrivers")
 	if od == nil {
 		t.Fatalf("osDrivers == nil")

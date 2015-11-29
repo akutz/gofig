@@ -36,10 +36,100 @@ func init() {
 	loadEtcEnvironment()
 }
 
-// Config contains the configuration information
-type Config struct {
-	FlagSets map[string]*flag.FlagSet `json:"-"`
+// Config is the interface that enables retrieving configuration information.
+type Config interface {
+
+	// Parent gets the configuration's parent (if set).
+	Parent() Config
+
+	// Scope returns a scoped view of the configuration. The specified scope
+	// string will be used to prefix all property retrievals via the Get
+	// and Set functions. Please note that the other functions will still
+	// operate as they would for the non-scoped configuration instance. This
+	// includes the AllSettings and AllKeys functions as well; they are *not*
+	// scoped.
+	Scope(scope string) Config
+
+	// FlagSets gets the config's flag sets.
+	FlagSets() map[string]*flag.FlagSet
+
+	// GetString returns the value associated with the key as a string
+	GetString(k string) string
+
+	// GetBool returns the value associated with the key as a bool
+	GetBool(k string) bool
+
+	// GetStringSlice returns the value associated with the key as a string
+	// slice.
+	GetStringSlice(k string) []string
+
+	// GetInt returns the value associated with the key as an int
+	GetInt(k string) int
+
+	// Get returns the value associated with the key
+	Get(k string) interface{}
+
+	// Set sets an override value
+	Set(k string, v interface{})
+
+	// IsSet returns a flag indicating whether or not a key is set.
+	IsSet(k string) bool
+
+	// Copy creates a copy of this Config instance
+	Copy() (Config, error)
+
+	// ToJSON exports this Config instance to a JSON string
+	ToJSON() (string, error)
+
+	// ToJSONCompact exports this Config instance to a compact JSON string
+	ToJSONCompact() (string, error)
+
+	// MarshalJSON implements the encoding/json.Marshaller interface. It allows
+	// this type to provide its own marshalling routine.
+	MarshalJSON() ([]byte, error)
+
+	// ReadConfig reads a configuration stream into the current config instance
+	ReadConfig(in io.Reader) error
+
+	// ReadConfigFile reads a configuration files into the current config
+	// instance
+	ReadConfigFile(filePath string) error
+
+	// EnvVars returns an array of the initialized configuration keys as
+	// key=value strings where the key is configuration key's environment
+	// variable key and the value is the current value for that key.
+	EnvVars() []string
+
+	// AllKeys gets a list of all the keys present in this configuration.
+	AllKeys() []string
+
+	// AllSettings gets a map of this configuration's settings.
+	AllSettings() map[string]interface{}
+}
+
+// config contains the configuration information
+type config struct {
+	flagSets map[string]*flag.FlagSet
 	v        *viper.Viper
+}
+
+// scopedConfig is a scoped configuration information
+type scopedConfig struct {
+	c     Config
+	scope string
+}
+
+// FromJSON initializes a new Config instance from a JSON string
+func FromJSON(from string) (Config, error) {
+	c := newConfig()
+	m := map[string]interface{}{}
+	if err := json.Unmarshal([]byte(from), &m); err != nil {
+		return nil, err
+	}
+	for k, v := range m {
+		c.v.Set(k, v)
+	}
+	return c, nil
 }
 
 // SetGlobalConfigPath sets the path of the directory from which the global
@@ -60,21 +150,242 @@ func Register(r *Registration) {
 }
 
 // New initializes a new instance of a Config struct
-func New() *Config {
-	return NewConfig(true, true, "config", "yml")
+func New() Config {
+	return newConfig()
 }
 
 // NewConfig initialies a new instance of a Config object with the specified
 // options.
 func NewConfig(
 	loadGlobalConfig, loadUserConfig bool,
-	configName, configType string) *Config {
+	configName, configType string) Config {
+	return newConfigWithOptions(
+		loadGlobalConfig, loadUserConfig, configName, configType)
+}
+
+func (c *scopedConfig) Parent() Config {
+	return c.c
+}
+func (c *config) Parent() Config {
+	return nil
+}
+
+func (c *scopedConfig) Scope(scope string) Config {
+	return &scopedConfig{c: c, scope: scope}
+}
+func (c *config) Scope(scope string) Config {
+	return &scopedConfig{c: c, scope: scope}
+}
+
+func (c *scopedConfig) FlagSets() map[string]*flag.FlagSet {
+	return c.c.FlagSets()
+}
+func (c *config) FlagSets() map[string]*flag.FlagSet {
+	return c.flagSets
+}
+
+func (c *scopedConfig) Copy() (Config, error) {
+	return c.c.Copy()
+}
+func (c *config) Copy() (Config, error) {
+	newC := newConfig()
+	m := map[string]interface{}{}
+	c.v.Unmarshal(&m)
+	for k, v := range m {
+		newC.v.Set(k, v)
+	}
+	return newC, nil
+}
+
+func (c *scopedConfig) ToJSON() (string, error) {
+	return c.c.ToJSON()
+}
+func (c *config) ToJSON() (string, error) {
+	buf, _ := json.MarshalIndent(c, "", "  ")
+	return string(buf), nil
+}
+
+func (c *scopedConfig) ToJSONCompact() (string, error) {
+	return c.c.ToJSONCompact()
+}
+func (c *config) ToJSONCompact() (string, error) {
+	buf, _ := json.Marshal(c)
+	return string(buf), nil
+}
+
+func (c *scopedConfig) MarshalJSON() ([]byte, error) {
+	return c.c.MarshalJSON()
+}
+func (c *config) MarshalJSON() ([]byte, error) {
+	return json.Marshal(c.allSettings())
+}
+
+func (c *scopedConfig) ReadConfig(in io.Reader) error {
+	return c.c.ReadConfig(in)
+}
+func (c *config) ReadConfig(in io.Reader) error {
+	if in == nil {
+		return errors.New("config reader is nil")
+	}
+	return c.v.MergeConfig(in)
+}
+
+func (c *scopedConfig) ReadConfigFile(filePath string) error {
+	return c.c.ReadConfigFile(filePath)
+}
+func (c *config) ReadConfigFile(filePath string) error {
+	buf, err := ioutil.ReadFile(filePath)
+	if err != nil {
+		return err
+	}
+	return c.ReadConfig(bytes.NewBuffer(buf))
+}
+
+func (c *scopedConfig) EnvVars() []string {
+	return c.c.EnvVars()
+}
+func (c *config) EnvVars() []string {
+	keyVals := c.allSettings()
+	envVars := make(map[string]string)
+	c.flattenEnvVars("", keyVals, envVars)
+	var evArr []string
+	for k, v := range envVars {
+		evArr = append(evArr, fmt.Sprintf("%s=%v", k, v))
+	}
+	return evArr
+}
+
+func (c *scopedConfig) AllKeys() []string {
+	return c.c.AllKeys()
+}
+func (c *config) AllKeys() []string {
+	ak := []string{}
+	as := c.allSettings()
+
+	for k, v := range as {
+		switch tv := v.(type) {
+		case nil:
+			continue
+		case map[string]interface{}:
+			flattenArrayKeys(k, tv, &ak)
+		default:
+			ak = append(ak, k)
+		}
+	}
+
+	return ak
+}
+
+func (c *config) AllSettings() map[string]interface{} {
+	return c.allSettings()
+}
+func (c *scopedConfig) AllSettings() map[string]interface{} {
+	return c.c.AllSettings()
+}
+
+func (c *config) GetString(k string) string {
+	return c.v.GetString(k)
+}
+func (c *scopedConfig) GetString(k string) string {
+	sk := fmt.Sprintf("%s.%s", c.scope, k)
+	if c.c.IsSet(sk) {
+		return c.c.GetString(sk)
+	}
+	if c.Parent() != nil {
+		return c.c.Parent().GetString(k)
+	}
+	return ""
+}
+
+func (c *config) GetBool(k string) bool {
+	return c.v.GetBool(k)
+}
+func (c *scopedConfig) GetBool(k string) bool {
+	sk := fmt.Sprintf("%s.%s", c.scope, k)
+	if c.c.IsSet(sk) {
+		return c.c.GetBool(sk)
+	}
+	if c.Parent() != nil {
+		return c.c.Parent().GetBool(k)
+	}
+	return false
+}
+
+func (c *config) GetStringSlice(k string) []string {
+	return c.v.GetStringSlice(k)
+}
+func (c *scopedConfig) GetStringSlice(k string) []string {
+	sk := fmt.Sprintf("%s.%s", c.scope, k)
+	if c.c.IsSet(sk) {
+		return c.c.GetStringSlice(sk)
+	}
+	if c.Parent() != nil {
+		return c.c.Parent().GetStringSlice(k)
+	}
+	return nil
+}
+
+func (c *config) GetInt(k string) int {
+	return c.v.GetInt(k)
+}
+func (c *scopedConfig) GetInt(k string) int {
+	sk := fmt.Sprintf("%s.%s", c.scope, k)
+	if c.c.IsSet(sk) {
+		return c.c.GetInt(sk)
+	}
+	if c.Parent() != nil {
+		return c.c.Parent().GetInt(k)
+	}
+	return 0
+}
+
+func (c *config) Get(k string) interface{} {
+	return c.v.Get(k)
+}
+func (c *scopedConfig) Get(k string) interface{} {
+	sk := fmt.Sprintf("%s.%s", c.scope, k)
+	if c.c.IsSet(sk) {
+		return c.c.Get(sk)
+	}
+	if c.Parent() != nil {
+		return c.c.Parent().Get(k)
+	}
+	return nil
+}
+
+func (c *config) IsSet(k string) bool {
+	return c.v.IsSet(k)
+}
+func (c *scopedConfig) IsSet(k string) bool {
+	if c.c.IsSet(fmt.Sprintf("%s.%s", c.scope, k)) {
+		return true
+	}
+	if c.c.Parent() != nil {
+		return c.c.Parent().IsSet(k)
+	}
+	return false
+}
+
+func (c *config) Set(k string, v interface{}) {
+	c.v.Set(k, v)
+}
+func (c *scopedConfig) Set(k string, v interface{}) {
+	c.c.Set(fmt.Sprintf("%s.%s", c.scope, k), v)
+}
+
+func newConfig() *config {
+	return newConfigWithOptions(true, true, "config", "yml")
+}
+
+func newConfigWithOptions(
+	loadGlobalConfig, loadUserConfig bool,
+	configName, configType string) *config {
 
 	log.Debug("initializing configuration")
 
-	c := &Config{
+	c := &config{
 		v:        viper.New(),
-		FlagSets: map[string]*flag.FlagSet{},
+		flagSets: map[string]*flag.FlagSet{},
 	}
 	c.v.SetTypeByDefaultValue(false)
 	c.v.SetConfigName(configName)
@@ -105,7 +416,7 @@ func NewConfig(
 	return c
 }
 
-func (c *Config) processRegistrations() {
+func (c *config) processRegistrations() {
 	for _, r := range registrations {
 
 		fs := &flag.FlagSet{}
@@ -149,7 +460,7 @@ func (c *Config) processRegistrations() {
 			c.v.BindPFlag(k.keyName, fs.Lookup(k.flagName))
 		}
 
-		c.FlagSets[r.name+" Flags"] = fs
+		c.flagSets[r.name+" Flags"] = fs
 
 		// read the config
 		if r.yaml != "" {
@@ -158,82 +469,9 @@ func (c *Config) processRegistrations() {
 	}
 }
 
-// Copy creates a copy of this Config instance
-func (c *Config) Copy() (*Config, error) {
-	newC := New()
-	m := map[string]interface{}{}
-	c.v.Unmarshal(&m)
-	for k, v := range m {
-		newC.v.Set(k, v)
-	}
-	return newC, nil
-}
-
-// FromJSON initializes a new Config instance from a JSON string
-func FromJSON(from string) (*Config, error) {
-	c := New()
-	m := map[string]interface{}{}
-	if err := json.Unmarshal([]byte(from), &m); err != nil {
-		return nil, err
-	}
-	for k, v := range m {
-		c.v.Set(k, v)
-	}
-	return c, nil
-}
-
-// ToJSON exports this Config instance to a JSON string
-func (c *Config) ToJSON() (string, error) {
-	buf, _ := json.MarshalIndent(c, "", "  ")
-	return string(buf), nil
-}
-
-// ToJSONCompact exports this Config instance to a compact JSON string
-func (c *Config) ToJSONCompact() (string, error) {
-	buf, _ := json.Marshal(c)
-	return string(buf), nil
-}
-
-// MarshalJSON implements the encoding/json.Marshaller interface. It allows
-// this type to provide its own marshalling routine.
-func (c *Config) MarshalJSON() ([]byte, error) {
-	return json.Marshal(c.allSettings())
-}
-
-// ReadConfig reads a configuration stream into the current config instance
-func (c *Config) ReadConfig(in io.Reader) error {
-	if in == nil {
-		return errors.New("config reader is nil")
-	}
-	return c.v.MergeConfig(in)
-}
-
-// ReadConfigFile reads a configuration files into the current config instance
-func (c *Config) ReadConfigFile(filePath string) error {
-	buf, err := ioutil.ReadFile(filePath)
-	if err != nil {
-		return err
-	}
-	return c.ReadConfig(bytes.NewBuffer(buf))
-}
-
-// EnvVars returns an array of the initialized configuration keys as key=value
-// strings where the key is configuration key's environment variable key and
-// the value is the current value for that key.
-func (c *Config) EnvVars() []string {
-	keyVals := c.allSettings()
-	envVars := make(map[string]string)
-	c.flattenEnvVars("", keyVals, envVars)
-	var evArr []string
-	for k, v := range envVars {
-		evArr = append(evArr, fmt.Sprintf("%s=%v", k, v))
-	}
-	return evArr
-}
-
 // flattenEnvVars returns a map of configuration keys coming from a config
 // which may have been nested.
-func (c *Config) flattenEnvVars(
+func (c *config) flattenEnvVars(
 	prefix string, keys map[string]interface{}, envVars map[string]string) {
 
 	for k, v := range keys {
@@ -271,31 +509,7 @@ func (c *Config) flattenEnvVars(
 	return
 }
 
-// AllKeys gets a list of all the keys present in this configuration.
-func (c *Config) AllKeys() []string {
-	ak := []string{}
-	as := c.allSettings()
-
-	for k, v := range as {
-		switch tv := v.(type) {
-		case nil:
-			continue
-		case map[string]interface{}:
-			flattenArrayKeys(k, tv, &ak)
-		default:
-			ak = append(ak, k)
-		}
-	}
-
-	return ak
-}
-
-// AllSettings gets a map of this configuration's settings.
-func (c *Config) AllSettings() map[string]interface{} {
-	return c.allSettings()
-}
-
-func (c *Config) allSettings() map[string]interface{} {
+func (c *config) allSettings() map[string]interface{} {
 	as := map[string]interface{}{}
 	ms := map[string]map[string]interface{}{}
 
@@ -353,36 +567,6 @@ func flattenMapKeys(
 			flat[strings.ToLower(kk)] = v
 		}
 	}
-}
-
-// GetString returns the value associated with the key as a string
-func (c *Config) GetString(k string) string {
-	return c.v.GetString(k)
-}
-
-// GetBool returns the value associated with the key as a bool
-func (c *Config) GetBool(k string) bool {
-	return c.v.GetBool(k)
-}
-
-// GetStringSlice returns the value associated with the key as a string slice
-func (c *Config) GetStringSlice(k string) []string {
-	return c.v.GetStringSlice(k)
-}
-
-// GetInt returns the value associated with the key as an int
-func (c *Config) GetInt(k string) int {
-	return c.v.GetInt(k)
-}
-
-// Get returns the value associated with the key
-func (c *Config) Get(k string) interface{} {
-	return c.v.Get(k)
-}
-
-// Set sets an override value
-func (c *Config) Set(k string, v interface{}) {
-	c.v.Set(k, v)
 }
 
 func loadEtcEnvironment() {
