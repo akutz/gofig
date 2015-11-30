@@ -292,7 +292,7 @@ func (c *scopedConfig) GetString(k string) string {
 		return c.c.GetString(sk)
 	}
 	if c.Parent() != nil {
-		return c.c.Parent().GetString(k)
+		return c.Parent().GetString(k)
 	}
 	return ""
 }
@@ -306,7 +306,7 @@ func (c *scopedConfig) GetBool(k string) bool {
 		return c.c.GetBool(sk)
 	}
 	if c.Parent() != nil {
-		return c.c.Parent().GetBool(k)
+		return c.Parent().GetBool(k)
 	}
 	return false
 }
@@ -320,7 +320,7 @@ func (c *scopedConfig) GetStringSlice(k string) []string {
 		return c.c.GetStringSlice(sk)
 	}
 	if c.Parent() != nil {
-		return c.c.Parent().GetStringSlice(k)
+		return c.Parent().GetStringSlice(k)
 	}
 	return nil
 }
@@ -334,7 +334,7 @@ func (c *scopedConfig) GetInt(k string) int {
 		return c.c.GetInt(sk)
 	}
 	if c.Parent() != nil {
-		return c.c.Parent().GetInt(k)
+		return c.Parent().GetInt(k)
 	}
 	return 0
 }
@@ -348,7 +348,7 @@ func (c *scopedConfig) Get(k string) interface{} {
 		return c.c.Get(sk)
 	}
 	if c.Parent() != nil {
-		return c.c.Parent().Get(k)
+		return c.Parent().Get(k)
 	}
 	return nil
 }
@@ -360,8 +360,8 @@ func (c *scopedConfig) IsSet(k string) bool {
 	if c.c.IsSet(fmt.Sprintf("%s.%s", c.scope, k)) {
 		return true
 	}
-	if c.c.Parent() != nil {
-		return c.c.Parent().IsSet(k)
+	if c.Parent() != nil {
+		return c.Parent().IsSet(k)
 	}
 	return false
 }

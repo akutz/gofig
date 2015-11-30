@@ -455,6 +455,15 @@ func TestScope(t *testing.T) {
 
 	assert.True(t, sc.IsSet("loglevel"))
 	assert.Equal(t, "error", sc.GetString("loglevel"))
+
+	assert.False(t, sc.IsSet("loggingEnabled"))
+	c.Set("loggingEnabled", true)
+	assert.Equal(t, true, c.GetBool("loggingEnabled"))
+	assert.Equal(t, true, sc.GetBool("loggingEnabled"))
+
+	sc.Set("loggingEnabled", false)
+	assert.Equal(t, true, c.GetBool("loggingEnabled"))
+	assert.Equal(t, false, sc.GetBool("loggingEnabled"))
 }
 
 func wipeEnv() {
