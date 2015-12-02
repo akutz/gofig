@@ -4,20 +4,19 @@ Package gofig simplifies external, runtime configuration of go programs.
 package gofig
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
-	"os/user"
 	"reflect"
 	"regexp"
 	"strings"
 
 	log "github.com/Sirupsen/logrus"
-	errors "github.com/akutz/goof"
+	"github.com/akutz/goof"
+	"github.com/akutz/gotil"
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 )
@@ -225,7 +224,7 @@ func (c *scopedConfig) ReadConfig(in io.Reader) error {
 }
 func (c *config) ReadConfig(in io.Reader) error {
 	if in == nil {
-		return errors.New("config reader is nil")
+		return goof.New("config reader is nil")
 	}
 	return c.v.MergeConfig(in)
 }
@@ -397,7 +396,7 @@ func newConfigWithOptions(
 	etcConfigFile := fmt.Sprintf("%s/%s", etcDirPath, cfgFile)
 	usrConfigFile := fmt.Sprintf("%s/%s", usrDirPath, cfgFile)
 
-	if loadGlobalConfig && fileExists(etcConfigFile) {
+	if loadGlobalConfig && gotil.FileExists(etcConfigFile) {
 		log.WithField("path", etcConfigFile).Debug("loading global config file")
 		if err := c.ReadConfigFile(etcConfigFile); err != nil {
 			log.WithError(err).WithField("path", etcConfigFile).Debug(
@@ -405,7 +404,7 @@ func newConfigWithOptions(
 		}
 	}
 
-	if loadUserConfig && fileExists(usrConfigFile) {
+	if loadUserConfig && gotil.FileExists(usrConfigFile) {
 		log.WithField("path", usrConfigFile).Debug("loading user config file")
 		if err := c.ReadConfigFile(usrConfigFile); err != nil {
 			log.WithError(err).WithField("path", usrConfigFile).Debug(
@@ -570,7 +569,7 @@ func flattenMapKeys(
 }
 
 func loadEtcEnvironment() {
-	lr := lineReader("/etc/environment")
+	lr, _ := gotil.LineReaderFrom("/etc/environment")
 	if lr == nil {
 		return
 	}
@@ -581,43 +580,4 @@ func loadEtcEnvironment() {
 		}
 		os.Setenv(m[1], m[2])
 	}
-}
-
-// fileExists returns a flag indicating whether a provided file path exists.
-func fileExists(filePath string) bool {
-	if _, err := os.Stat(filePath); !os.IsNotExist(err) {
-		return true
-	}
-	return false
-}
-
-// lineReader returns a channel that reads the contents of a file line-by-line.
-func lineReader(filePath string) <-chan string {
-	if !fileExists(filePath) {
-		return nil
-	}
-
-	c := make(chan string)
-	go func() {
-		f, _ := os.Open(filePath)
-		defer f.Close()
-
-		s := bufio.NewScanner(f)
-		for s.Scan() {
-			c <- s.Text()
-		}
-		close(c)
-	}()
-	return c
-}
-
-// homeDir returns the home directory of the user that owns the current process.
-func homeDir() string {
-	if homeDirPath != "" {
-		return homeDirPath
-	}
-	if user, err := user.Current(); err == nil {
-		homeDirPath = user.HomeDir
-	}
-	return homeDirPath
 }

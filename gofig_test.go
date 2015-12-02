@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	log "github.com/Sirupsen/logrus"
+	"github.com/akutz/gotil"
 	"github.com/stretchr/testify/assert"
 	//jww "github.com/spf13/jwalterweatherman"
 )
@@ -300,7 +301,7 @@ func TestEnvVars(t *testing.T) {
 }
 
 func assertEnvVar(s string, evs []string, t *testing.T) {
-	if !stringInSlice(s, evs) {
+	if !gotil.StringInSlice(s, evs) {
 		t.Fatal(s)
 	}
 }
@@ -311,7 +312,7 @@ func TestCopy(t *testing.T) {
 	Register(testReg3())
 
 	t.Logf("etcCfgFilePath=%s", etcCfgFilePath)
-	writeStringToFile(string(yamlConfig1), etcCfgFilePath)
+	gotil.WriteStringToFile(string(yamlConfig1), etcCfgFilePath)
 
 	c1 := New()
 
@@ -330,7 +331,7 @@ func TestCopy(t *testing.T) {
 
 func TestNewWithUserConfigFile(t *testing.T) {
 	_, usrCfgFilePath := newConfigDirs("TestNewWithUserConfigFile", t)
-	writeStringToFile(string(yamlConfig1), usrCfgFilePath)
+	gotil.WriteStringToFile(string(yamlConfig1), usrCfgFilePath)
 
 	c := New()
 
@@ -349,7 +350,7 @@ func TestNewWithUserConfigFile(t *testing.T) {
 
 func TestNewWithUserConfigFileWithErrors(t *testing.T) {
 	_, usrCfgFilePath := newConfigDirs("TestNewWithUserConfigFileWithErrors", t)
-	writeStringToFile(string(yamlConfig1), usrCfgFilePath)
+	gotil.WriteStringToFile(string(yamlConfig1), usrCfgFilePath)
 
 	os.Chmod(usrCfgFilePath, 0000)
 	New()
@@ -359,7 +360,7 @@ func TestNewWithGlobalConfigFile(t *testing.T) {
 	etcCfgFilePath, _ := newConfigDirs("TestNewWithGlobalConfigFile", t)
 
 	t.Logf("etcCfgFilePath=%s", etcCfgFilePath)
-	writeStringToFile(string(yamlConfig1), etcCfgFilePath)
+	gotil.WriteStringToFile(string(yamlConfig1), etcCfgFilePath)
 
 	c := New()
 
@@ -381,7 +382,7 @@ func TestNewWithGlobalConfigFileWithErrors(t *testing.T) {
 		"TestNewWithGlobalConfigFileWithErrors", t)
 
 	t.Logf("etcCfgFilePath=%s", etcCfgFilePath)
-	writeStringToFile(string(yamlConfig1), etcCfgFilePath)
+	gotil.WriteStringToFile(string(yamlConfig1), etcCfgFilePath)
 
 	os.Chmod(etcCfgFilePath, 0000)
 	New()
@@ -637,27 +638,6 @@ var jsonConfigWithYamlConfig1 = `{
     "rexray.loglevel": "error"
 }
 `
-
-func writeStringToFile(text, path string) error {
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY, 0644)
-	defer f.Close()
-
-	if err != nil {
-		return err
-	}
-
-	f.WriteString(text)
-	return nil
-}
-
-func stringInSlice(a string, list []string) bool {
-	for _, b := range list {
-		if strings.ToLower(b) == strings.ToLower(a) {
-			return true
-		}
-	}
-	return false
-}
 
 func testReg1() *Registration {
 	r := NewRegistration("Global")
