@@ -106,6 +106,8 @@ func (r *Registration) Key(
 			}
 		}
 		rk.flagName = strings.Join(kp, "")
+	} else {
+		rk.flagName = keys[1]
 	}
 
 	if lk < 3 {
@@ -114,6 +116,8 @@ func (r *Registration) Key(
 			kp[x] = strings.ToUpper(s)
 		}
 		rk.envVarName = strings.Join(kp, "_")
+	} else {
+		rk.envVarName = keys[2]
 	}
 
 	r.keys = append(r.keys, rk)
