@@ -13,6 +13,7 @@ import (
 	"reflect"
 	"regexp"
 	"strings"
+	"sync"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/akutz/goof"
@@ -22,16 +23,22 @@ import (
 )
 
 var (
-	homeDirPath   string
-	etcDirPath    string
-	usrDirPath    string
-	envVarRx      *regexp.Regexp
-	registrations []*Registration
-	prefix        string
+	homeDirPath      string
+	etcDirPath       string
+	usrDirPath       string
+	envVarRx         *regexp.Regexp
+	registrations    []*Registration
+	registrationsRWL *sync.RWMutex
+	secureKeys       map[string]*regKey
+	secureKeysRWL    *sync.RWMutex
+	prefix           string
 )
 
 func init() {
 	envVarRx = regexp.MustCompile(`^\s*([^#=]+?)=(.+)$`)
+	registrationsRWL = &sync.RWMutex{}
+	secureKeys = map[string]*regKey{}
+	secureKeysRWL = &sync.RWMutex{}
 	loadEtcEnvironment()
 }
 
@@ -145,6 +152,8 @@ func SetUserConfigPath(path string) {
 
 // Register registers a new configuration with the config package.
 func Register(r *Registration) {
+	registrationsRWL.Lock()
+	defer registrationsRWL.Unlock()
 	registrations = append(registrations, r)
 }
 
@@ -200,7 +209,10 @@ func (c *scopedConfig) ToJSON() (string, error) {
 	return c.c.ToJSON()
 }
 func (c *config) ToJSON() (string, error) {
-	buf, _ := json.MarshalIndent(c, "", "  ")
+	buf, err := c.marshalIndentJSON(true)
+	if err != nil {
+		return "", err
+	}
 	return string(buf), nil
 }
 
@@ -208,7 +220,10 @@ func (c *scopedConfig) ToJSONCompact() (string, error) {
 	return c.c.ToJSONCompact()
 }
 func (c *config) ToJSONCompact() (string, error) {
-	buf, _ := json.Marshal(c)
+	buf, err := c.marshalJSON(true)
+	if err != nil {
+		return "", err
+	}
 	return string(buf), nil
 }
 
@@ -216,7 +231,7 @@ func (c *scopedConfig) MarshalJSON() ([]byte, error) {
 	return c.c.MarshalJSON()
 }
 func (c *config) MarshalJSON() ([]byte, error) {
-	return json.Marshal(c.allSettings())
+	return c.marshalJSON(true)
 }
 
 func (c *scopedConfig) ReadConfig(in io.Reader) error {
@@ -415,7 +430,67 @@ func newConfigWithOptions(
 	return c
 }
 
+func (c *config) marshalJSON(secure bool) ([]byte, error) {
+	var m map[string]interface{}
+	if secure {
+		var err error
+		if m, err = c.allSecureSettings(); err != nil {
+			return nil, err
+		}
+	} else {
+		m = c.allSettings()
+	}
+	return json.Marshal(m)
+}
+
+func (c *config) marshalIndentJSON(secure bool) ([]byte, error) {
+	var m map[string]interface{}
+	if secure {
+		var err error
+		if m, err = c.allSecureSettings(); err != nil {
+			return nil, err
+		}
+	} else {
+		m = c.allSettings()
+	}
+	return json.MarshalIndent(m, "", "  ")
+}
+
+func (c *config) allSecureSettings() (map[string]interface{}, error) {
+	buf, err := json.Marshal(c.allSettings())
+	if err != nil {
+		return nil, err
+	}
+	var m map[string]interface{}
+	if err := json.Unmarshal(buf, &m); err != nil {
+		return nil, err
+	}
+
+	deleteSecureValues("", m)
+
+	return m, err
+}
+
+func deleteSecureValues(prefix string, m map[string]interface{}) {
+	for k, v := range m {
+		kk := k
+		if prefix != "" {
+			kk = fmt.Sprintf("%s.%s", prefix, k)
+		}
+		if isSecureKey(kk) {
+			delete(m, k)
+		}
+		switch tv := v.(type) {
+		case map[string]interface{}:
+			deleteSecureValues(kk, tv)
+		}
+	}
+}
+
 func (c *config) processRegistrations() {
+	registrationsRWL.RLock()
+	defer registrationsRWL.RUnlock()
+
 	for _, r := range registrations {
 
 		fs := &flag.FlagSet{}
@@ -438,7 +513,7 @@ func (c *config) processRegistrations() {
 
 			if k.short == "" {
 				switch k.keyType {
-				case String:
+				case String, SecureString:
 					fs.String(k.flagName, k.defVal.(string), k.desc)
 				case Int:
 					fs.Int(k.flagName, k.defVal.(int), k.desc)
@@ -447,7 +522,7 @@ func (c *config) processRegistrations() {
 				}
 			} else {
 				switch k.keyType {
-				case String:
+				case String, SecureString:
 					fs.StringP(k.flagName, k.short, k.defVal.(string), k.desc)
 				case Int:
 					fs.IntP(k.flagName, k.short, k.defVal.(int), k.desc)
@@ -580,4 +655,16 @@ func loadEtcEnvironment() {
 		}
 		os.Setenv(m[1], m[2])
 	}
+}
+
+func isSecureKey(k string) bool {
+	secureKeysRWL.RLock()
+	defer secureKeysRWL.RUnlock()
+	kn := strings.ToLower(k)
+	_, ok := secureKeys[kn]
+	log.WithFields(log.Fields{
+		"keyName":  kn,
+		"isSecure": ok,
+	}).Debug("isSecureKey")
+	return ok
 }

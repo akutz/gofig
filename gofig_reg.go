@@ -5,7 +5,9 @@ import (
 	"strings"
 	"unicode"
 
-	errors "github.com/akutz/goof"
+	log "github.com/Sirupsen/logrus"
+
+	"github.com/akutz/goof"
 )
 
 // Registration is used to register configuration information with the gofig
@@ -28,6 +30,10 @@ const (
 
 	// Bool is a key with a boolean value
 	Bool
+
+	// SecureString is a key with a string value that is not included when the
+	// configuration is marshaled to JSON.
+	SecureString
 )
 
 type regKey struct {
@@ -67,17 +73,10 @@ func (r *Registration) Key(
 	description string,
 	keys ...string) {
 
-	if keys == nil {
-		panic(errors.New("keys is nil"))
-	}
-
 	lk := len(keys)
-
 	if lk == 0 {
-		panic(errors.New("len(keys) == 0"))
+		panic(goof.New("keys is empty"))
 	}
-
-	kn := keys[0]
 
 	rk := &regKey{
 		keyType: keyType,
@@ -87,8 +86,12 @@ func (r *Registration) Key(
 		keyName: keys[0],
 	}
 
+	if keyType == SecureString {
+		secureKey(rk)
+	}
+
 	if lk < 2 {
-		kp := strings.Split(kn, ".")
+		kp := strings.Split(rk.keyName, ".")
 		for x, s := range kp {
 			if x == 0 {
 				var buff []byte
@@ -111,7 +114,7 @@ func (r *Registration) Key(
 	}
 
 	if lk < 3 {
-		kp := strings.Split(kn, ".")
+		kp := strings.Split(rk.keyName, ".")
 		for x, s := range kp {
 			kp[x] = strings.ToUpper(s)
 		}
@@ -121,4 +124,12 @@ func (r *Registration) Key(
 	}
 
 	r.keys = append(r.keys, rk)
+}
+
+func secureKey(k *regKey) {
+	secureKeysRWL.Lock()
+	defer secureKeysRWL.Unlock()
+	kn := strings.ToLower(k.keyName)
+	log.WithField("keyName", kn).Debug("securing key")
+	secureKeys[kn] = k
 }

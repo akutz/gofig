@@ -491,12 +491,74 @@ func TestKeyNames(t *testing.T) {
 	assert.Equal(t, "PASSWORD", pass.envVarName)
 }
 
+func TestSecureKeys(t *testing.T) {
+	wipeEnv()
+	Register(testReg3())
+
+	r := NewRegistration("Test Reg 4")
+	r.yaml = `
+testReg4:
+  password: i should be hidden
+  credentials:
+    passphrase: i should be hidden
+    passphrase2: i'm okay to show
+`
+	r.Key(SecureString, "", "", "", "testReg4.password")
+	r.Key(SecureString, "", "", "", "testReg4.credentials.passphrase")
+	r.Key(String, "", "", "", "testReg4.credentials.passphrase2")
+	Register(r)
+
+	c := New()
+
+	jsonStr, err := c.ToJSON()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	assert.True(t,
+		strings.Contains(jsonStr, `"passphrase2": "i'm okay to show"`))
+	assert.False(t,
+		strings.Contains(jsonStr, `"password": "i should be hidden"`))
+	assert.False(t,
+		strings.Contains(jsonStr, `"passphrase": "i should be hidden"`))
+
+	wipeEnv()
+	Register(testReg3())
+
+	r = NewRegistration("Test Reg 4")
+	r.yaml = `
+testReg4:
+  password: i should be hidden
+  credentials:
+    passphrase: i should be hidden
+    passphrase2: i'm okay to show
+`
+	r.Key(String, "", "", "", "testReg4.password")
+	r.Key(String, "", "", "", "testReg4.credentials.passphrase")
+	r.Key(String, "", "", "", "testReg4.credentials.passphrase2")
+	Register(r)
+
+	c = New()
+
+	if jsonStr, err = c.ToJSON(); err != nil {
+		t.Fatal(err)
+	}
+
+	assert.True(t,
+		strings.Contains(jsonStr, `"passphrase2": "i'm okay to show"`))
+	assert.True(t,
+		strings.Contains(jsonStr, `"password": "i should be hidden"`))
+	assert.True(t,
+		strings.Contains(jsonStr, `"passphrase": "i should be hidden"`))
+}
+
 func wipeEnv() {
 	evs := os.Environ()
 	for _, v := range evs {
 		k := strings.Split(v, "=")[0]
 		os.Setenv(k, "")
 	}
+	secureKeys = map[string]*regKey{}
 }
 
 func printKeys(title string, c Config, t *testing.T) {
