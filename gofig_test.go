@@ -467,6 +467,30 @@ func TestScope(t *testing.T) {
 	assert.Equal(t, false, sc.GetBool("loggingEnabled"))
 }
 
+func TestKeyNames(t *testing.T) {
+	r := NewRegistration("Test Reg 4")
+	r.Key(String, "", "", "", "testReg4.host")
+	r.Key(String, "", "admin", "", "testReg4.userName", "user")
+	r.Key(String, "", "", "", "testReg4.password", "password", "PASSWORD")
+	Register(r)
+
+	host := r.keys[0]
+	user := r.keys[1]
+	pass := r.keys[2]
+
+	assert.Equal(t, "testReg4.host", host.keyName)
+	assert.Equal(t, "testReg4Host", host.flagName)
+	assert.Equal(t, "TESTREG4_HOST", host.envVarName)
+
+	assert.Equal(t, "testReg4.userName", user.keyName)
+	assert.Equal(t, "user", user.flagName)
+	assert.Equal(t, "TESTREG4_USERNAME", user.envVarName)
+
+	assert.Equal(t, "testReg4.password", pass.keyName)
+	assert.Equal(t, "password", pass.flagName)
+	assert.Equal(t, "PASSWORD", pass.envVarName)
+}
+
 func wipeEnv() {
 	evs := os.Environ()
 	for _, v := range evs {
