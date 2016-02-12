@@ -134,6 +134,50 @@ func assertConfigsEqual(c1 Config, c2 Config, t *testing.T) bool {
 	return true
 }
 
+func TestValidateYAML(t *testing.T) {
+
+	var err error
+
+	_, err = ValidateYAMLString(string(yamlConfig1))
+	assert.NoError(t, err)
+	_, err = ValidateYAMLString(string(yamlConfig2))
+	assert.NoError(t, err)
+
+	yamlString := `
+hello, world
+`
+	_, err = ValidateYAMLString(yamlString)
+	assert.Error(t, err)
+
+	yamlString = `
+	hi:
+		hello: you
+`
+	_, err = ValidateYAMLString(yamlString)
+	assert.Error(t, err)
+
+	yamlString = `
+hi:
+	hello: you
+`
+	_, err = ValidateYAMLString(yamlString)
+	assert.Error(t, err)
+
+	yamlString = `
+hi:
+    hello: you
+`
+	_, err = ValidateYAMLString(yamlString)
+	assert.NoError(t, err)
+
+	yamlString = `
+hi:
+  hello: you
+`
+	_, err = ValidateYAMLString(yamlString)
+	assert.NoError(t, err)
+}
+
 func TestAssertConfigDefaults(t *testing.T) {
 	newConfigDirs("TestAssertConfigDefaults", t)
 	wipeEnv()
