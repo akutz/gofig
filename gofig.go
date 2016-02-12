@@ -20,6 +20,7 @@ import (
 	"github.com/akutz/gotil"
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
+	yaml "gopkg.in/yaml.v2"
 )
 
 var (
@@ -667,4 +668,24 @@ func isSecureKey(k string) bool {
 		"isSecure": ok,
 	}).Debug("isSecureKey")
 	return ok
+}
+
+// ValidateYAML verifies the YAML in the stream is valid.
+func ValidateYAML(r io.Reader) (map[interface{}]interface{}, error) {
+	b, err := ioutil.ReadAll(r)
+	if err != nil {
+		return nil, err
+	}
+	m := map[interface{}]interface{}{}
+	if err := yaml.Unmarshal(b, &m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+// ValidateYAMLString verifies the YAML string valid.
+func ValidateYAMLString(s string) (map[interface{}]interface{}, error) {
+	b := &bytes.Buffer{}
+	b.WriteString(s)
+	return ValidateYAML(b)
 }
