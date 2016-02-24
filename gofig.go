@@ -194,7 +194,11 @@ func (c *config) FlagSets() map[string]*flag.FlagSet {
 }
 
 func (c *scopedConfig) Copy() (Config, error) {
-	return c.c.Copy()
+	cc, err := c.c.Copy()
+	if err != nil {
+		return nil, err
+	}
+	return cc.Scope(c.scope), nil
 }
 func (c *config) Copy() (Config, error) {
 	newC := newConfig()
