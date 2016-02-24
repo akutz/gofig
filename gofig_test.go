@@ -509,6 +509,14 @@ func TestScope(t *testing.T) {
 	sc.Set("loggingEnabled", false)
 	assert.Equal(t, true, c.GetBool("loggingEnabled"))
 	assert.Equal(t, false, sc.GetBool("loggingEnabled"))
+
+	scc, err := sc.Copy()
+	assert.NoError(t, err)
+
+	assert.True(t, scc.IsSet("loglevel"))
+	assert.Equal(t, "error", scc.GetString("loglevel"))
+	assert.True(t, scc.IsSet("loggingEnabled"))
+	assert.Equal(t, false, scc.GetBool("loggingEnabled"))
 }
 
 func TestKeyNames(t *testing.T) {
