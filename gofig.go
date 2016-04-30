@@ -498,9 +498,18 @@ func (c *config) processRegistrations() {
 
 	for _, r := range registrations {
 
-		fs := &flag.FlagSet{}
+		fsn := fmt.Sprintf("%s Flags", r.name)
+		fs, ok := c.flagSets[fsn]
+		if !ok {
+			fs = &flag.FlagSet{}
+			c.flagSets[fsn] = fs
+		}
 
 		for _, k := range r.keys {
+
+			if fs.Lookup(k.flagName) != nil {
+				continue
+			}
 
 			evn := k.envVarName
 
@@ -538,8 +547,6 @@ func (c *config) processRegistrations() {
 
 			c.v.BindPFlag(k.keyName, fs.Lookup(k.flagName))
 		}
-
-		c.flagSets[r.name+" Flags"] = fs
 
 		// read the config
 		if r.yaml != "" {
