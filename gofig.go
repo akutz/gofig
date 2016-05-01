@@ -172,7 +172,6 @@ type scopedConfig struct {
 
 func (c *scopedConfig) key(k string) string {
 	sk := fmt.Sprintf("%s.%s", c.scope, c.prefixRX.ReplaceAllString(k, ""))
-	fmt.Printf("scopeKey: k=%s,sk=%s,scope=%s,prefix=%s\n", k, sk, c.scope, c.prefix)
 	return sk
 }
 
