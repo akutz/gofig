@@ -519,6 +519,22 @@ func TestScope(t *testing.T) {
 	assert.Equal(t, false, scc.GetBool("loggingEnabled"))
 }
 
+func TestScopeWithPrefix(t *testing.T) {
+	c := New()
+	c.Set("hello.world.everyone.out.here", true)
+	c.Set("hello.world.everyone.out.there", false)
+	c.Set("hello.world.planet2.everyone.out.there", true)
+	assert.True(t, c.GetBool("hello.world.everyone.out.here"))
+	assert.False(t, c.GetBool("hello.world.everyone.out.there"))
+
+	sc := c.Scope("hello.world.planet2")
+	scp := c.ScopeWithPrefix("hello.world.planet2", "hello.world")
+	assert.False(t, sc.GetBool("hello.world.everyone.out.there"))
+	assert.True(t, scp.GetBool("hello.world.everyone.out.there"))
+	assert.True(t, sc.GetBool("hello.world.everyone.out.here"))
+	assert.True(t, scp.GetBool("hello.world.everyone.out.here"))
+}
+
 func TestKeyNames(t *testing.T) {
 	r := NewRegistration("Test Reg 4")
 	r.Key(String, "", "", "", "testReg4.host")
