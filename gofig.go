@@ -57,6 +57,48 @@ type Config interface {
 	// scoped.
 	Scope(scope string) Config
 
+	/*
+		ScopeWithPrefix returns a scoped view of the configuration like the
+		Scope function, but this variant allows the specification of a prefix.
+		The prefix enables the creation of a scoped configuration that does
+		not have the fully-qualified paths to the desired configuration keys.
+		For example, imagine the following YAML:
+
+		    gofig:
+			  logging:
+			    enabled: true
+			  modules:
+			    admin:
+				  gofig:
+				    logging:
+				      enabled: true
+
+		To enable or disable logging the key is `gofig.logging.enabled`, but the
+		modules may require their own distinct values controlling logging when
+		using a scoped configuration via `Scope("gofig.modules.admin")`. However,
+		unless the complete key path of `gofig.logging.enabled` is replicated
+		under each named module, this isn't possible using the standard key
+		`gofig.logging.enabled`.
+
+		Using `ScopeWithPrefix("gofig.modules.admin", "gofig")`` it is now
+		possible to enable the following YAML configuration so that the
+		scoped configuration can still use the `gofig.logging.enabled` key to
+		access the property value.
+
+		    gofig:
+			  logging:
+			    enabled: true
+			  modules:
+			    admin:
+				  logging:
+				    enabled: true
+
+		The prefix value is simply removed from key requests such that an attempt
+		to access the key `gofig.logging.enabled` actually results in the an
+		access attempt using the key `logging.enabled`.
+	*/
+	ScopeWithPrefix(scope, prefix string) Config
+
 	// FlagSets gets the config's flag sets.
 	FlagSets() map[string]*flag.FlagSet
 
@@ -122,8 +164,16 @@ type config struct {
 
 // scopedConfig is a scoped configuration information
 type scopedConfig struct {
-	c     Config
-	scope string
+	Config
+	scope    string
+	prefix   string
+	prefixRX *regexp.Regexp
+}
+
+func (c *scopedConfig) key(k string) string {
+	sk := fmt.Sprintf("%s.%s", c.scope, c.prefixRX.ReplaceAllString(k, ""))
+	fmt.Printf("scopeKey: k=%s,sk=%s,scope=%s,prefix=%s\n", k, sk, c.scope, c.prefix)
+	return sk
 }
 
 // FromJSON initializes a new Config instance from a JSON string
@@ -173,32 +223,35 @@ func NewConfig(
 }
 
 func (c *scopedConfig) Parent() Config {
-	return c.c
+	return c.Config
 }
 func (c *config) Parent() Config {
 	return nil
 }
 
-func (c *scopedConfig) Scope(scope string) Config {
-	return &scopedConfig{c: c, scope: scope}
-}
 func (c *config) Scope(scope string) Config {
-	return &scopedConfig{c: c, scope: scope}
+	return c.ScopeWithPrefix(scope, "")
 }
 
-func (c *scopedConfig) FlagSets() map[string]*flag.FlagSet {
-	return c.c.FlagSets()
+func (c *config) ScopeWithPrefix(scope, prefix string) Config {
+	return &scopedConfig{
+		Config:   c,
+		scope:    scope,
+		prefix:   prefix,
+		prefixRX: regexp.MustCompile(fmt.Sprintf(`^%s\.`, prefix)),
+	}
 }
+
 func (c *config) FlagSets() map[string]*flag.FlagSet {
 	return c.flagSets
 }
 
 func (c *scopedConfig) Copy() (Config, error) {
-	cc, err := c.c.Copy()
+	cc, err := c.Config.Copy()
 	if err != nil {
 		return nil, err
 	}
-	return cc.Scope(c.scope), nil
+	return cc.ScopeWithPrefix(c.scope, c.prefix), nil
 }
 func (c *config) Copy() (Config, error) {
 	newC := newConfig()
@@ -210,9 +263,6 @@ func (c *config) Copy() (Config, error) {
 	return newC, nil
 }
 
-func (c *scopedConfig) ToJSON() (string, error) {
-	return c.c.ToJSON()
-}
 func (c *config) ToJSON() (string, error) {
 	buf, err := c.marshalIndentJSON(true)
 	if err != nil {
@@ -221,9 +271,6 @@ func (c *config) ToJSON() (string, error) {
 	return string(buf), nil
 }
 
-func (c *scopedConfig) ToJSONCompact() (string, error) {
-	return c.c.ToJSONCompact()
-}
 func (c *config) ToJSONCompact() (string, error) {
 	buf, err := c.marshalJSON(true)
 	if err != nil {
@@ -232,16 +279,10 @@ func (c *config) ToJSONCompact() (string, error) {
 	return string(buf), nil
 }
 
-func (c *scopedConfig) MarshalJSON() ([]byte, error) {
-	return c.c.MarshalJSON()
-}
 func (c *config) MarshalJSON() ([]byte, error) {
 	return c.marshalJSON(true)
 }
 
-func (c *scopedConfig) ReadConfig(in io.Reader) error {
-	return c.c.ReadConfig(in)
-}
 func (c *config) ReadConfig(in io.Reader) error {
 	if in == nil {
 		return goof.New("config reader is nil")
@@ -249,9 +290,6 @@ func (c *config) ReadConfig(in io.Reader) error {
 	return c.v.MergeConfig(in)
 }
 
-func (c *scopedConfig) ReadConfigFile(filePath string) error {
-	return c.c.ReadConfigFile(filePath)
-}
 func (c *config) ReadConfigFile(filePath string) error {
 	buf, err := ioutil.ReadFile(filePath)
 	if err != nil {
@@ -260,9 +298,6 @@ func (c *config) ReadConfigFile(filePath string) error {
 	return c.ReadConfig(bytes.NewBuffer(buf))
 }
 
-func (c *scopedConfig) EnvVars() []string {
-	return c.c.EnvVars()
-}
 func (c *config) EnvVars() []string {
 	keyVals := c.allSettings()
 	envVars := make(map[string]string)
@@ -274,9 +309,6 @@ func (c *config) EnvVars() []string {
 	return evArr
 }
 
-func (c *scopedConfig) AllKeys() []string {
-	return c.c.AllKeys()
-}
 func (c *config) AllKeys() []string {
 	ak := []string{}
 	as := c.allSettings()
@@ -298,17 +330,14 @@ func (c *config) AllKeys() []string {
 func (c *config) AllSettings() map[string]interface{} {
 	return c.allSettings()
 }
-func (c *scopedConfig) AllSettings() map[string]interface{} {
-	return c.c.AllSettings()
-}
 
 func (c *config) GetString(k string) string {
 	return c.v.GetString(k)
 }
 func (c *scopedConfig) GetString(k string) string {
-	sk := fmt.Sprintf("%s.%s", c.scope, k)
-	if c.c.IsSet(sk) {
-		return c.c.GetString(sk)
+	sk := c.key(k)
+	if c.Config.IsSet(sk) {
+		return c.Config.GetString(sk)
 	}
 	if c.Parent() != nil {
 		return c.Parent().GetString(k)
@@ -320,9 +349,9 @@ func (c *config) GetBool(k string) bool {
 	return c.v.GetBool(k)
 }
 func (c *scopedConfig) GetBool(k string) bool {
-	sk := fmt.Sprintf("%s.%s", c.scope, k)
-	if c.c.IsSet(sk) {
-		return c.c.GetBool(sk)
+	sk := c.key(k)
+	if c.Config.IsSet(sk) {
+		return c.Config.GetBool(sk)
 	}
 	if c.Parent() != nil {
 		return c.Parent().GetBool(k)
@@ -334,9 +363,9 @@ func (c *config) GetStringSlice(k string) []string {
 	return c.v.GetStringSlice(k)
 }
 func (c *scopedConfig) GetStringSlice(k string) []string {
-	sk := fmt.Sprintf("%s.%s", c.scope, k)
-	if c.c.IsSet(sk) {
-		return c.c.GetStringSlice(sk)
+	sk := c.key(k)
+	if c.Config.IsSet(sk) {
+		return c.Config.GetStringSlice(sk)
 	}
 	if c.Parent() != nil {
 		return c.Parent().GetStringSlice(k)
@@ -348,9 +377,9 @@ func (c *config) GetInt(k string) int {
 	return c.v.GetInt(k)
 }
 func (c *scopedConfig) GetInt(k string) int {
-	sk := fmt.Sprintf("%s.%s", c.scope, k)
-	if c.c.IsSet(sk) {
-		return c.c.GetInt(sk)
+	sk := c.key(k)
+	if c.Config.IsSet(sk) {
+		return c.Config.GetInt(sk)
 	}
 	if c.Parent() != nil {
 		return c.Parent().GetInt(k)
@@ -362,9 +391,9 @@ func (c *config) Get(k string) interface{} {
 	return c.v.Get(k)
 }
 func (c *scopedConfig) Get(k string) interface{} {
-	sk := fmt.Sprintf("%s.%s", c.scope, k)
-	if c.c.IsSet(sk) {
-		return c.c.Get(sk)
+	sk := c.key(k)
+	if c.Config.IsSet(sk) {
+		return c.Config.Get(sk)
 	}
 	if c.Parent() != nil {
 		return c.Parent().Get(k)
@@ -376,7 +405,8 @@ func (c *config) IsSet(k string) bool {
 	return c.v.IsSet(k)
 }
 func (c *scopedConfig) IsSet(k string) bool {
-	if c.c.IsSet(fmt.Sprintf("%s.%s", c.scope, k)) {
+	sk := c.key(k)
+	if c.Config.IsSet(sk) {
 		return true
 	}
 	if c.Parent() != nil {
@@ -389,7 +419,7 @@ func (c *config) Set(k string, v interface{}) {
 	c.v.Set(k, v)
 }
 func (c *scopedConfig) Set(k string, v interface{}) {
-	c.c.Set(fmt.Sprintf("%s.%s", c.scope, k), v)
+	c.Config.Set(fmt.Sprintf("%s.%s", c.scope, k), v)
 }
 
 func newConfig() *config {
