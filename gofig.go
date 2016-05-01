@@ -171,8 +171,14 @@ type scopedConfig struct {
 }
 
 func (c *scopedConfig) key(k string) string {
-	sk := fmt.Sprintf("%s.%s", c.scope, c.prefixRX.ReplaceAllString(k, ""))
-	return sk
+	rk := k
+	if c.prefixRX != nil {
+		rk = c.prefixRX.ReplaceAllString(k, "")
+	}
+	if c.scope == "" {
+		return rk
+	}
+	return fmt.Sprintf("%s.%s", c.scope, rk)
 }
 
 // FromJSON initializes a new Config instance from a JSON string
@@ -233,11 +239,32 @@ func (c *config) Scope(scope string) Config {
 }
 
 func (c *config) ScopeWithPrefix(scope, prefix string) Config {
+	var prefixRX *regexp.Regexp
+	if prefix != "" {
+		prefixRX = regexp.MustCompile(fmt.Sprintf(`^%s\.`, prefix))
+	}
 	return &scopedConfig{
 		Config:   c,
 		scope:    scope,
 		prefix:   prefix,
-		prefixRX: regexp.MustCompile(fmt.Sprintf(`^%s\.`, prefix)),
+		prefixRX: prefixRX,
+	}
+}
+
+func (c *scopedConfig) Scope(scope string) Config {
+	return c.ScopeWithPrefix(scope, "")
+}
+
+func (c *scopedConfig) ScopeWithPrefix(scope, prefix string) Config {
+	var prefixRX *regexp.Regexp
+	if prefix != "" {
+		prefixRX = regexp.MustCompile(fmt.Sprintf(`^%s\.`, prefix))
+	}
+	return &scopedConfig{
+		Config:   c,
+		scope:    scope,
+		prefix:   prefix,
+		prefixRX: prefixRX,
 	}
 }
 
@@ -331,17 +358,18 @@ func (c *config) AllSettings() map[string]interface{} {
 }
 
 func (c *config) GetString(k string) string {
+	//fmt.Printf("config.GetString(%s)\n", k)
 	return c.v.GetString(k)
 }
 func (c *scopedConfig) GetString(k string) string {
 	sk := c.key(k)
+	//fmt.Printf("scopedConfig.Parent.IsSet(%s)\n", sk)
 	if c.Config.IsSet(sk) {
+		//fmt.Printf("scopedConfig.Parent.GetString(%s)\n", sk)
 		return c.Config.GetString(sk)
 	}
-	if c.Parent() != nil {
-		return c.Parent().GetString(k)
-	}
-	return ""
+	//fmt.Printf("scopedConfig.Parent.GetString(%s)\n", k)
+	return c.Config.GetString(k)
 }
 
 func (c *config) GetBool(k string) bool {
@@ -352,10 +380,7 @@ func (c *scopedConfig) GetBool(k string) bool {
 	if c.Config.IsSet(sk) {
 		return c.Config.GetBool(sk)
 	}
-	if c.Parent() != nil {
-		return c.Parent().GetBool(k)
-	}
-	return false
+	return c.Config.GetBool(k)
 }
 
 func (c *config) GetStringSlice(k string) []string {
@@ -366,10 +391,7 @@ func (c *scopedConfig) GetStringSlice(k string) []string {
 	if c.Config.IsSet(sk) {
 		return c.Config.GetStringSlice(sk)
 	}
-	if c.Parent() != nil {
-		return c.Parent().GetStringSlice(k)
-	}
-	return nil
+	return c.Config.GetStringSlice(k)
 }
 
 func (c *config) GetInt(k string) int {
@@ -380,10 +402,7 @@ func (c *scopedConfig) GetInt(k string) int {
 	if c.Config.IsSet(sk) {
 		return c.Config.GetInt(sk)
 	}
-	if c.Parent() != nil {
-		return c.Parent().GetInt(k)
-	}
-	return 0
+	return c.Config.GetInt(k)
 }
 
 func (c *config) Get(k string) interface{} {
@@ -391,34 +410,27 @@ func (c *config) Get(k string) interface{} {
 }
 func (c *scopedConfig) Get(k string) interface{} {
 	sk := c.key(k)
+	//fmt.Printf("scopedConfig.Parent.IsSet(%s)\n", sk)
 	if c.Config.IsSet(sk) {
+		//fmt.Printf("scopedConfig.Get(%s)\n", sk)
 		return c.Config.Get(sk)
 	}
-	if c.Parent() != nil {
-		return c.Parent().Get(k)
-	}
-	return nil
+	//fmt.Printf("scopedConfig.Parent.Get(%s)\n", k)
+	return c.Config.Get(k)
 }
 
 func (c *config) IsSet(k string) bool {
 	return c.v.IsSet(k)
 }
 func (c *scopedConfig) IsSet(k string) bool {
-	sk := c.key(k)
-	if c.Config.IsSet(sk) {
-		return true
-	}
-	if c.Parent() != nil {
-		return c.Parent().IsSet(k)
-	}
-	return false
+	return c.Config.IsSet(c.key(k)) || c.Config.IsSet(k)
 }
 
 func (c *config) Set(k string, v interface{}) {
 	c.v.Set(k, v)
 }
 func (c *scopedConfig) Set(k string, v interface{}) {
-	c.Config.Set(fmt.Sprintf("%s.%s", c.scope, k), v)
+	c.Config.Set(c.key(k), v)
 }
 
 func newConfig() *config {

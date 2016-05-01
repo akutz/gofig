@@ -523,16 +523,24 @@ func TestScopeWithPrefix(t *testing.T) {
 	c := New()
 	c.Set("hello.world.everyone.out.here", true)
 	c.Set("hello.world.everyone.out.there", false)
+
+	c.Set("hello.world.planet2.everyone.out.here", false)
 	c.Set("hello.world.planet2.everyone.out.there", true)
+
+	c.Set("hello.world.planet2.lib.path", "/tmp")
+
 	assert.True(t, c.GetBool("hello.world.everyone.out.here"))
 	assert.False(t, c.GetBool("hello.world.everyone.out.there"))
 
 	sc := c.Scope("hello.world.planet2")
 	scp := c.ScopeWithPrefix("hello.world.planet2", "hello.world")
-	assert.False(t, sc.GetBool("hello.world.everyone.out.there"))
-	assert.True(t, scp.GetBool("hello.world.everyone.out.there"))
+
 	assert.True(t, sc.GetBool("hello.world.everyone.out.here"))
-	assert.True(t, scp.GetBool("hello.world.everyone.out.here"))
+	assert.False(t, sc.GetBool("hello.world.everyone.out.there"))
+
+	assert.False(t, scp.GetBool("hello.world.everyone.out.here"))
+	assert.True(t, scp.GetBool("hello.world.everyone.out.there"))
+	assert.Equal(t, "/tmp", scp.GetString("hello.world.lib.path"))
 }
 
 func TestKeyNames(t *testing.T) {
