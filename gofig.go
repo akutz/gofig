@@ -132,7 +132,7 @@ type config struct {
 
 // scopedConfig is a scoped configuration information
 type scopedConfig struct {
-	*config
+	Config
 	scope string
 }
 
@@ -191,17 +191,17 @@ func (c *config) GetLogLevel() log.Level {
 }
 
 func (c *scopedConfig) Parent() Config {
-	return c.config
+	return c.Config
 }
 func (c *config) Parent() Config {
 	return nil
 }
 
 func (c *scopedConfig) Scope(scope string) Config {
-	return &scopedConfig{config: c.config, scope: scope}
+	return &scopedConfig{Config: c, scope: scope}
 }
 func (c *config) Scope(scope string) Config {
-	return &scopedConfig{config: c, scope: scope}
+	return &scopedConfig{Config: c, scope: scope}
 }
 
 func (c *scopedConfig) GetScope() string {
@@ -216,11 +216,11 @@ func (c *config) FlagSets() map[string]*flag.FlagSet {
 }
 
 func (c *scopedConfig) Copy() (Config, error) {
-	cc, err := c.config.Copy()
+	cc, err := c.Config.Copy()
 	if err != nil {
 		return nil, err
 	}
-	return cc.Scope(c.scope), nil
+	return &scopedConfig{Config: cc, scope: c.scope}, nil
 }
 func (c *config) Copy() (Config, error) {
 	newC := newConfig()
@@ -302,12 +302,13 @@ func (c *config) AllSettings() map[string]interface{} {
 }
 
 func (c *config) GetString(k string) string {
+	c.WithField("key", k).Debug("config.GetString")
 	return c.v.GetString(k)
 }
 func (c *scopedConfig) GetString(k string) string {
 	sk := fmt.Sprintf("%s.%s", c.scope, k)
-	if c.config.IsSet(sk) {
-		return c.config.GetString(sk)
+	if c.Config.IsSet(sk) {
+		return c.Config.GetString(sk)
 	}
 	if c.Parent() != nil {
 		return c.Parent().GetString(k)
@@ -316,12 +317,13 @@ func (c *scopedConfig) GetString(k string) string {
 }
 
 func (c *config) GetBool(k string) bool {
+	c.WithField("key", k).Debug("config.GetBool")
 	return c.v.GetBool(k)
 }
 func (c *scopedConfig) GetBool(k string) bool {
 	sk := fmt.Sprintf("%s.%s", c.scope, k)
-	if c.config.IsSet(sk) {
-		return c.config.GetBool(sk)
+	if c.Config.IsSet(sk) {
+		return c.Config.GetBool(sk)
 	}
 	if c.Parent() != nil {
 		return c.Parent().GetBool(k)
@@ -330,12 +332,13 @@ func (c *scopedConfig) GetBool(k string) bool {
 }
 
 func (c *config) GetStringSlice(k string) []string {
+	c.WithField("key", k).Debug("config.GetStringSlice")
 	return c.v.GetStringSlice(k)
 }
 func (c *scopedConfig) GetStringSlice(k string) []string {
 	sk := fmt.Sprintf("%s.%s", c.scope, k)
-	if c.config.IsSet(sk) {
-		return c.config.GetStringSlice(sk)
+	if c.Config.IsSet(sk) {
+		return c.Config.GetStringSlice(sk)
 	}
 	if c.Parent() != nil {
 		return c.Parent().GetStringSlice(k)
@@ -344,12 +347,13 @@ func (c *scopedConfig) GetStringSlice(k string) []string {
 }
 
 func (c *config) GetInt(k string) int {
+	c.WithField("key", k).Debug("config.GetInt")
 	return c.v.GetInt(k)
 }
 func (c *scopedConfig) GetInt(k string) int {
 	sk := fmt.Sprintf("%s.%s", c.scope, k)
-	if c.config.IsSet(sk) {
-		return c.config.GetInt(sk)
+	if c.Config.IsSet(sk) {
+		return c.Config.GetInt(sk)
 	}
 	if c.Parent() != nil {
 		return c.Parent().GetInt(k)
@@ -358,12 +362,13 @@ func (c *scopedConfig) GetInt(k string) int {
 }
 
 func (c *config) Get(k string) interface{} {
+	c.WithField("key", k).Debug("config.Get")
 	return c.v.Get(k)
 }
 func (c *scopedConfig) Get(k string) interface{} {
 	sk := fmt.Sprintf("%s.%s", c.scope, k)
-	if c.config.IsSet(sk) {
-		return c.config.Get(sk)
+	if c.Config.IsSet(sk) {
+		return c.Config.Get(sk)
 	}
 	if c.Parent() != nil {
 		return c.Parent().Get(k)
@@ -372,10 +377,11 @@ func (c *scopedConfig) Get(k string) interface{} {
 }
 
 func (c *config) IsSet(k string) bool {
+	c.WithField("key", k).Debug("config.IsSet")
 	return c.v.IsSet(k)
 }
 func (c *scopedConfig) IsSet(k string) bool {
-	if c.config.IsSet(fmt.Sprintf("%s.%s", c.scope, k)) {
+	if c.Config.IsSet(fmt.Sprintf("%s.%s", c.scope, k)) {
 		return true
 	}
 	if c.Parent() != nil {
@@ -388,7 +394,7 @@ func (c *config) Set(k string, v interface{}) {
 	c.v.Set(k, v)
 }
 func (c *scopedConfig) Set(k string, v interface{}) {
-	c.config.Set(fmt.Sprintf("%s.%s", c.scope, k), v)
+	c.Config.Set(fmt.Sprintf("%s.%s", c.scope, k), v)
 }
 
 func newConfig() *config {
