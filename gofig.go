@@ -63,6 +63,9 @@ type Config interface {
 	// scoped.
 	Scope(scope string) Config
 
+	// GetScope returns the config's current scope (if any).
+	GetScope() string
+
 	// FlagSets gets the config's flag sets.
 	FlagSets() map[string]*flag.FlagSet
 
@@ -199,6 +202,13 @@ func (c *scopedConfig) Scope(scope string) Config {
 }
 func (c *config) Scope(scope string) Config {
 	return &scopedConfig{config: c, scope: scope}
+}
+
+func (c *scopedConfig) GetScope() string {
+	return c.scope
+}
+func (c *config) GetScope() string {
+	return ""
 }
 
 func (c *config) FlagSets() map[string]*flag.FlagSet {
