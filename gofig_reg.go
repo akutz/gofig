@@ -5,8 +5,7 @@ import (
 	"strings"
 	"unicode"
 
-	log "github.com/Sirupsen/logrus"
-
+	//log "github.com/Sirupsen/logrus"
 	"github.com/akutz/goof"
 )
 
@@ -130,6 +129,6 @@ func secureKey(k *regKey) {
 	secureKeysRWL.Lock()
 	defer secureKeysRWL.Unlock()
 	kn := strings.ToLower(k.keyName)
-	log.WithField("keyName", kn).Debug("securing key")
+	//log.WithField("keyName", kn).Debug("securing key")
 	secureKeys[kn] = k
 }

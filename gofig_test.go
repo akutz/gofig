@@ -134,6 +134,13 @@ func assertConfigsEqual(c1 Config, c2 Config, t *testing.T) bool {
 	return true
 }
 
+func TestSetLogLevel(t *testing.T) {
+	log.SetLevel(log.DebugLevel)
+	New()
+	log.SetLevel(log.InfoLevel)
+	New()
+}
+
 func TestValidateYAML(t *testing.T) {
 
 	var err error
