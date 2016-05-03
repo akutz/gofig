@@ -24,6 +24,22 @@ import (
 )
 
 var (
+	// LogGetAndSet determines whether or not gettting and seetting values
+	// is logged.
+	LogGetAndSet = false
+
+	// LogSecureKey determines whether or not secure key attempts are logged.
+	LogSecureKey = false
+
+	// LogFlattenEnvVars determines whether or not flattening environment
+	// variables is logged.
+	LogFlattenEnvVars = false
+
+	// LogRegKey determines whether or not key registrations are logged.
+	LogRegKey = false
+)
+
+var (
 	homeDirPath      string
 	etcDirPath       string
 	usrDirPath       string
@@ -302,7 +318,9 @@ func (c *config) AllSettings() map[string]interface{} {
 }
 
 func (c *config) GetString(k string) string {
-	c.WithField("key", k).Debug("config.GetString")
+	if LogGetAndSet {
+		c.WithField("key", k).Debug("config.GetString")
+	}
 	return c.v.GetString(k)
 }
 func (c *scopedConfig) GetString(k string) string {
@@ -317,7 +335,9 @@ func (c *scopedConfig) GetString(k string) string {
 }
 
 func (c *config) GetBool(k string) bool {
-	c.WithField("key", k).Debug("config.GetBool")
+	if LogGetAndSet {
+		c.WithField("key", k).Debug("config.GetBool")
+	}
 	return c.v.GetBool(k)
 }
 func (c *scopedConfig) GetBool(k string) bool {
@@ -332,7 +352,9 @@ func (c *scopedConfig) GetBool(k string) bool {
 }
 
 func (c *config) GetStringSlice(k string) []string {
-	c.WithField("key", k).Debug("config.GetStringSlice")
+	if LogGetAndSet {
+		c.WithField("key", k).Debug("config.GetStringSlice")
+	}
 	return c.v.GetStringSlice(k)
 }
 func (c *scopedConfig) GetStringSlice(k string) []string {
@@ -347,7 +369,9 @@ func (c *scopedConfig) GetStringSlice(k string) []string {
 }
 
 func (c *config) GetInt(k string) int {
-	c.WithField("key", k).Debug("config.GetInt")
+	if LogGetAndSet {
+		c.WithField("key", k).Debug("config.GetInt")
+	}
 	return c.v.GetInt(k)
 }
 func (c *scopedConfig) GetInt(k string) int {
@@ -362,7 +386,9 @@ func (c *scopedConfig) GetInt(k string) int {
 }
 
 func (c *config) Get(k string) interface{} {
-	c.WithField("key", k).Debug("config.Get")
+	if LogGetAndSet {
+		c.WithField("key", k).Debug("config.Get")
+	}
 	return c.v.Get(k)
 }
 func (c *scopedConfig) Get(k string) interface{} {
@@ -377,7 +403,9 @@ func (c *scopedConfig) Get(k string) interface{} {
 }
 
 func (c *config) IsSet(k string) bool {
-	c.WithField("key", k).Debug("config.IsSet")
+	if LogGetAndSet {
+		c.WithField("key", k).Debug("config.IsSet")
+	}
 	return c.v.IsSet(k)
 }
 func (c *scopedConfig) IsSet(k string) bool {
@@ -521,14 +549,16 @@ func (c *config) processRegistrations() {
 
 			evn := k.envVarName
 
-			c.WithFields(log.Fields{
-				"keyName":      k.keyName,
-				"keyType":      k.keyType,
-				"flagName":     k.flagName,
-				"envVar":       evn,
-				"defaultValue": k.defVal,
-				"usage":        k.desc,
-			}).Debug("adding flag")
+			if LogRegKey {
+				c.WithFields(log.Fields{
+					"keyName":      k.keyName,
+					"keyType":      k.keyType,
+					"flagName":     k.flagName,
+					"envVar":       evn,
+					"defaultValue": k.defVal,
+					"usage":        k.desc,
+				}).Debug("adding flag")
+			}
 
 			// bind the environment variable
 			c.v.BindEnv(k.keyName, evn)
@@ -578,10 +608,12 @@ func (c *config) flattenEnvVars(
 		}
 		ek := strings.ToUpper(strings.Replace(kk, ".", "_", -1))
 
-		c.WithFields(log.Fields{
-			"key":   kk,
-			"value": v,
-		}).Debug("flattening env vars")
+		if LogFlattenEnvVars {
+			c.WithFields(log.Fields{
+				"key":   kk,
+				"value": v,
+			}).Debug("flattening env vars")
+		}
 
 		switch vt := v.(type) {
 		case string:
@@ -623,11 +655,13 @@ func (c *config) allSettings() map[string]interface{} {
 		flattenMapKeys(msk, msv, flat)
 		for fk, fv := range flat {
 			if asv, ok := as[fk]; ok && reflect.DeepEqual(asv, fv) {
-				c.WithFields(log.Fields{
-					"key":     fk,
-					"valAll":  asv,
-					"valFlat": fv,
-				}).Debug("deleting duplicate flat val")
+				if LogFlattenEnvVars {
+					c.WithFields(log.Fields{
+						"key":     fk,
+						"valAll":  asv,
+						"valFlat": fv,
+					}).Debug("deleting duplicate flat val")
+				}
 				delete(as, fk)
 			}
 		}
@@ -682,10 +716,12 @@ func (c *config) isSecureKey(k string) bool {
 	defer secureKeysRWL.RUnlock()
 	kn := strings.ToLower(k)
 	_, ok := secureKeys[kn]
-	c.WithFields(log.Fields{
-		"keyName":  kn,
-		"isSecure": ok,
-	}).Debug("isSecureKey")
+	if LogSecureKey {
+		c.WithFields(log.Fields{
+			"keyName":  kn,
+			"isSecure": ok,
+		}).Debug("isSecureKey")
+	}
 	return ok
 }
 
