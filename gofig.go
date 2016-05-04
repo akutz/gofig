@@ -12,6 +12,7 @@ import (
 	"os"
 	"reflect"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -26,7 +27,7 @@ import (
 var (
 	// LogGetAndSet determines whether or not gettting and seetting values
 	// is logged.
-	LogGetAndSet = false
+	LogGetAndSet, _ = strconv.ParseBool(os.Getenv("GOFIG_LOG_GETSET"))
 
 	// LogSecureKey determines whether or not secure key attempts are logged.
 	LogSecureKey = false
