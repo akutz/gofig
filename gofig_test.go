@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"path"
 	"reflect"
 	"strconv"
 	"strings"
@@ -609,6 +610,68 @@ testReg4:
 		strings.Contains(jsonStr, `"password": "i should be hidden"`))
 	assert.True(t,
 		strings.Contains(jsonStr, `"passphrase": "i should be hidden"`))
+}
+
+func TestReplaceEnvVars(t *testing.T) {
+
+	myhome := "/home/user"
+	mytemp := "/tmp/"
+
+	yaml1 := []byte(`
+libstorage:
+  vfs:
+    root: $MYHOME/.libstorage/vfs
+`)
+
+	yaml2 := []byte(`
+libstorage:
+  vfs:
+    paths:
+    - $MYHOME/.libstorage
+    - $MYTEMP/libstorage
+`)
+
+	os.Setenv("MYHOME", myhome)
+	os.Setenv("MYTEMP", mytemp)
+
+	homeLibstorage := path.Join(myhome, ".libstorage")
+	homeLibstorage = strings.Replace(homeLibstorage, "//", "/", -1)
+
+	homeLibstorageVFS := path.Join(homeLibstorage, "vfs")
+	homeLibstorageVFS = strings.Replace(homeLibstorageVFS, "//", "/", -1)
+
+	tempLibstorage := path.Join(mytemp, "libstorage")
+	tempLibstorage = strings.Replace(tempLibstorage, "//", "/", -1)
+
+	t.Logf("home=%s", myhome)
+	t.Logf("homeLibstorage=%s", homeLibstorage)
+	t.Logf("homeLibstorageVFS=%s", homeLibstorageVFS)
+
+	t.Logf("temp=%s", mytemp)
+	t.Logf("tempLibstorage=%s", tempLibstorage)
+
+	c := New()
+
+	assert.NoError(t, c.ReadConfig(bytes.NewReader(yaml1)))
+	assert.Equal(t, homeLibstorageVFS, c.GetString("libstorage.vfs.root"))
+
+	assert.NoError(t, c.ReadConfig(bytes.NewReader(yaml2)))
+
+	ss := c.GetStringSlice("libstorage.vfs.paths")
+	assert.Equal(t, 2, len(ss))
+	assert.Equal(t, homeLibstorage, ss[0])
+	assert.Equal(t, tempLibstorage, strings.Replace(ss[1], "//", "/", -1))
+
+	c.DisableEnvVarSubstitution(true)
+
+	ss = c.GetStringSlice("libstorage.vfs.paths")
+	assert.Equal(t, 2, len(ss))
+	assert.Equal(
+		t,
+		"$MYHOME/.libstorage/vfs",
+		c.GetString("libstorage.vfs.root"))
+	assert.Equal(t, "$MYHOME/.libstorage", ss[0])
+	assert.Equal(t, "$MYTEMP/libstorage", ss[1])
 }
 
 func wipeEnv() {

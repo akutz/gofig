@@ -38,6 +38,19 @@ var (
 
 	// LogRegKey determines whether or not key registrations are logged.
 	LogRegKey, _ = strconv.ParseBool(os.Getenv("GOFIG_LOG_REGKEY"))
+
+	// DisableEnvVarSubstitution determines whether or not Gofig will replace
+	// environment variables with their actual values. This transformation is
+	// applied only to the values returned by the GetString and GetStringSlice
+	// functions. Environment variable substitution is not applied to config
+	// keys for example.
+	//
+	// New Config instances inherit this value at the time of the instance
+	// creation. However, this value has no effect on existing config instances.
+	// Those instances have a function named DisableEnvVarSubstitution that is
+	// able to disable/enable the feature for that instance.
+	DisableEnvVarSubstitution, _ = strconv.ParseBool(
+		os.Getenv("GOFIG_DISABLE_ENVVAR_SUBSTITUTION"))
 )
 
 var (
@@ -62,6 +75,10 @@ func init() {
 
 // Config is the interface that enables retrieving configuration information.
 type Config interface {
+
+	// DisableEnvVarSubstitution is the same as the global flag,
+	// DisableEnvVarSubstitution.
+	DisableEnvVarSubstitution(disable bool)
 
 	// Parent gets the configuration's parent (if set).
 	Parent() Config
@@ -136,8 +153,9 @@ type Config interface {
 
 // config contains the configuration information
 type config struct {
-	flagSets map[string]*flag.FlagSet
-	v        *viper.Viper
+	v                         *viper.Viper
+	flagSets                  map[string]*flag.FlagSet
+	disableEnvVarSubstitution bool
 }
 
 // scopedConfig is a scoped configuration information
@@ -190,6 +208,10 @@ func NewConfig(
 	configName, configType string) Config {
 	return newConfigWithOptions(
 		loadGlobalConfig, loadUserConfig, configName, configType)
+}
+
+func (c *config) DisableEnvVarSubstitution(disable bool) {
+	c.disableEnvVarSubstitution = disable
 }
 
 func (c *scopedConfig) Parent() Config {
@@ -317,11 +339,25 @@ func (c *config) AllSettings() map[string]interface{} {
 	return c.allSettings()
 }
 
+func (c *config) replaceEnvVars(s string, envVars []string) string {
+	if c.disableEnvVarSubstitution {
+		return s
+	}
+
+	for _, evPair := range envVars {
+		evParts := strings.Split(evPair, "=")
+		evKey := fmt.Sprintf("$%s", evParts[0])
+		evVal := evParts[1]
+		s = strings.Replace(s, evKey, evVal, -1)
+	}
+	return s
+}
+
 func (c *config) GetString(k string) string {
 	if LogGetAndSet {
 		log.WithField("key", k).Debug("config.GetString")
 	}
-	return c.v.GetString(k)
+	return c.replaceEnvVars(c.v.GetString(k), os.Environ())
 }
 func (c *scopedConfig) GetString(k string) string {
 	sk := fmt.Sprintf("%s.%s", c.scope, k)
@@ -355,7 +391,13 @@ func (c *config) GetStringSlice(k string) []string {
 	if LogGetAndSet {
 		log.WithField("key", k).Debug("config.GetStringSlice")
 	}
-	return c.v.GetStringSlice(k)
+	ss := c.v.GetStringSlice(k)
+	rss := []string{}
+	envVars := os.Environ()
+	for _, s := range ss {
+		rss = append(rss, c.replaceEnvVars(s, envVars))
+	}
+	return rss
 }
 func (c *scopedConfig) GetStringSlice(k string) []string {
 	sk := fmt.Sprintf("%s.%s", c.scope, k)
@@ -434,8 +476,9 @@ func newConfigWithOptions(
 	configName, configType string) *config {
 
 	c := &config{
-		v:        viper.New(),
-		flagSets: map[string]*flag.FlagSet{},
+		v:                         viper.New(),
+		flagSets:                  map[string]*flag.FlagSet{},
+		disableEnvVarSubstitution: DisableEnvVarSubstitution,
 	}
 
 	log.Debug("initializing configuration")
