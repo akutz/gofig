@@ -71,6 +71,10 @@ func init() {
 	secureKeys = map[string]*regKey{}
 	secureKeysRWL = &sync.RWMutex{}
 	loadEtcEnvironment()
+
+	// tell the yaml package to presrve JSON compatibility by using a string
+	// as the map key
+	yaml.PreserveJSONCodecCompatibility(true)
 }
 
 // Config is the interface that enables retrieving configuration information.
