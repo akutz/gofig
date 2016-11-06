@@ -8,7 +8,8 @@ before_install:
   - go get github.com/Masterminds/glide
 install:
   - glide install
-  - go get -d $(glide nv)
+  - go get -tags pflag -d .
 script:
-  - go install $(glide nv)
+  - go install .
+  - go install -tags pflag .
   - goveralls -service=travis-ci
