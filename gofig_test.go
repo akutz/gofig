@@ -118,7 +118,9 @@ func assertConfigsEqual(c1 Config, c2 Config, t *testing.T) bool {
 		c1v := c1.Get(k)
 		c2v := c2.Get(k)
 		if !reflect.DeepEqual(c1v, c2v) {
-			t.Logf("%s != in both configs; c1v=%v, c2v=%v", k, c1v, c2v)
+			t.Logf("%s != in both configs; "+
+				"c1v:type=%[2]T,val=%[2]v; "+
+				"c2v:type=%[3]T,val=%[3]v", k, c1v, c2v)
 			return false
 		}
 	}
@@ -127,7 +129,9 @@ func assertConfigsEqual(c1 Config, c2 Config, t *testing.T) bool {
 		c1v := c1.Get(k)
 		c2v := c2.Get(k)
 		if !reflect.DeepEqual(c1v, c2v) {
-			t.Logf("%s != in both configs; c1v=%v, c2v=%v", k, c1v, c2v)
+			t.Logf("%s != in both configs; "+
+				"c1v:type=%[2]T,val=%[2]v; "+
+				"c2v:type=%[3]T,val=%[3]v", k, c1v, c2v)
 			return false
 		}
 	}
@@ -528,7 +532,7 @@ func TestScope(t *testing.T) {
 }
 
 func TestKeyNames(t *testing.T) {
-	r := NewRegistration("Test Reg 4")
+	r := newRegistration("Test Reg 4")
 	r.Key(String, "", "", "", "testReg4.host")
 	r.Key(String, "", "admin", "", "testReg4.userName", "user")
 	r.Key(String, "", "", "", "testReg4.password", "password", "PASSWORD")
@@ -538,24 +542,24 @@ func TestKeyNames(t *testing.T) {
 	user := r.keys[1]
 	pass := r.keys[2]
 
-	assert.Equal(t, "testReg4.host", host.keyName)
-	assert.Equal(t, "testReg4Host", host.flagName)
-	assert.Equal(t, "TESTREG4_HOST", host.envVarName)
+	assert.Equal(t, "testReg4.host", host.KeyName())
+	assert.Equal(t, "testReg4Host", host.FlagName())
+	assert.Equal(t, "TESTREG4_HOST", host.EnvVarName())
 
-	assert.Equal(t, "testReg4.userName", user.keyName)
-	assert.Equal(t, "user", user.flagName)
-	assert.Equal(t, "TESTREG4_USERNAME", user.envVarName)
+	assert.Equal(t, "testReg4.userName", user.KeyName())
+	assert.Equal(t, "user", user.FlagName())
+	assert.Equal(t, "TESTREG4_USERNAME", user.EnvVarName())
 
-	assert.Equal(t, "testReg4.password", pass.keyName)
-	assert.Equal(t, "password", pass.flagName)
-	assert.Equal(t, "PASSWORD", pass.envVarName)
+	assert.Equal(t, "testReg4.password", pass.KeyName())
+	assert.Equal(t, "password", pass.FlagName())
+	assert.Equal(t, "PASSWORD", pass.EnvVarName())
 }
 
 func TestSecureKeys(t *testing.T) {
 	wipeEnv()
 	Register(testReg3())
 
-	r := NewRegistration("Test Reg 4")
+	r := newRegistration("Test Reg 4")
 	r.yaml = `
 testReg4:
   password: i should be hidden
@@ -585,7 +589,7 @@ testReg4:
 	wipeEnv()
 	Register(testReg3())
 
-	r = NewRegistration("Test Reg 4")
+	r = newRegistration("Test Reg 4")
 	r.yaml = `
 testReg4:
   password: i should be hidden
@@ -680,7 +684,7 @@ func wipeEnv() {
 		k := strings.Split(v, "=")[0]
 		os.Setenv(k, "")
 	}
-	secureKeys = map[string]*regKey{}
+	secureKeys = map[string]ConfigRegistrationKey{}
 }
 
 func printKeys(title string, c Config, t *testing.T) {
@@ -847,10 +851,9 @@ var jsonConfigWithYamlConfig1 = `{
 }
 `
 
-func testReg1() *Registration {
-	r := NewRegistration("Global")
-	r.Yaml(`
-rexray:
+func testReg1() *configReg {
+	r := newRegistration("Global")
+	r.SetYAML(`rexray:
     host: tcp://:7979
     logLevel: warn
 `)
@@ -861,10 +864,9 @@ rexray:
 	return r
 }
 
-func testReg2() *Registration {
-	r := NewRegistration("Driver")
-	r.Yaml(`
-rexray:
+func testReg2() *configReg {
+	r := newRegistration("Driver")
+	r.SetYAML(`rexray:
     osDrivers:
     - linux
     storageDrivers:
@@ -881,26 +883,9 @@ rexray:
 	return r
 }
 
-func testReg3() *Registration {
-	r := NewRegistration("Mock Provider")
-	r.Yaml(`mockProvider:
-    userName: admin
-    useCerts: true
-    docker:
-        MinVolSize: 16
-`)
-	r.Key(String, "", "admin", "", "mockProvider.userName")
-	r.Key(String, "", "", "", "mockProvider.password")
-	r.Key(Bool, "", false, "", "mockProvider.useCerts")
-	r.Key(Int, "", 16, "", "mockProvider.docker.minVolSize")
-	r.Key(Bool, "i", true, "", "mockProvider.insecure")
-	r.Key(Int, "m", 256, "", "mockProvider.docker.maxVolSize")
-	return r
-}
-
-func testReg3a() *Registration {
-	r := NewRegistration("Test Reg 3")
-	r.Yaml(`testReg3:
+func testReg3a() *configReg {
+	r := newRegistration("Test Reg 3")
+	r.SetYAML(`testReg3:
     userName: admin
     useCerts: true
     keyFiles:

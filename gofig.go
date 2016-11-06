@@ -19,8 +19,6 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/akutz/goof"
 	"github.com/akutz/gotil"
-	flag "github.com/spf13/pflag"
-	"github.com/spf13/viper"
 	yaml "gopkg.in/yaml.v2"
 )
 
@@ -58,9 +56,9 @@ var (
 	etcDirPath       string
 	usrDirPath       string
 	envVarRx         *regexp.Regexp
-	registrations    []*Registration
+	registrations    []ConfigRegistration
 	registrationsRWL *sync.RWMutex
-	secureKeys       map[string]*regKey
+	secureKeys       map[string]ConfigRegistrationKey
 	secureKeysRWL    *sync.RWMutex
 	prefix           string
 )
@@ -68,101 +66,13 @@ var (
 func init() {
 	envVarRx = regexp.MustCompile(`^\s*([^#=]+?)=(.+)$`)
 	registrationsRWL = &sync.RWMutex{}
-	secureKeys = map[string]*regKey{}
+	secureKeys = map[string]ConfigRegistrationKey{}
 	secureKeysRWL = &sync.RWMutex{}
 	loadEtcEnvironment()
 
 	// tell the yaml package to presrve JSON compatibility by using a string
 	// as the map key
 	yaml.PreserveJSONCodecCompatibility(true)
-}
-
-// Config is the interface that enables retrieving configuration information.
-// The variations of the Get function, the Set, IsSet, and Scope functions
-// all take an interface{} as their first parameter. However, the param must be
-// either a string or a fmt.Stringer, otherwise the function will panic.
-type Config interface {
-
-	// DisableEnvVarSubstitution is the same as the global flag,
-	// DisableEnvVarSubstitution.
-	DisableEnvVarSubstitution(disable bool)
-
-	// Parent gets the configuration's parent (if set).
-	Parent() Config
-
-	// Scope returns a scoped view of the configuration. The specified scope
-	// string will be used to prefix all property retrievals via the Get
-	// and Set functions. Please note that the other functions will still
-	// operate as they would for the non-scoped configuration instance. This
-	// includes the AllSettings and AllKeys functions as well; they are *not*
-	// scoped.
-	Scope(scope interface{}) Config
-
-	// GetScope returns the config's current scope (if any).
-	GetScope() string
-
-	// FlagSets gets the config's flag sets.
-	FlagSets() map[string]*flag.FlagSet
-
-	// GetString returns the value associated with the key as a string
-	GetString(k interface{}) string
-
-	// GetBool returns the value associated with the key as a bool
-	GetBool(k interface{}) bool
-
-	// GetStringSlice returns the value associated with the key as a string
-	// slice.
-	GetStringSlice(k interface{}) []string
-
-	// GetInt returns the value associated with the key as an int
-	GetInt(k interface{}) int
-
-	// Get returns the value associated with the key
-	Get(k interface{}) interface{}
-
-	// Set sets an override value
-	Set(k interface{}, v interface{})
-
-	// IsSet returns a flag indicating whether or not a key is set.
-	IsSet(k interface{}) bool
-
-	// Copy creates a copy of this Config instance
-	Copy() (Config, error)
-
-	// ToJSON exports this Config instance to a JSON string
-	ToJSON() (string, error)
-
-	// ToJSONCompact exports this Config instance to a compact JSON string
-	ToJSONCompact() (string, error)
-
-	// MarshalJSON implements the encoding/json.Marshaller interface. It allows
-	// this type to provide its own marshalling routine.
-	MarshalJSON() ([]byte, error)
-
-	// ReadConfig reads a configuration stream into the current config instance
-	ReadConfig(in io.Reader) error
-
-	// ReadConfigFile reads a configuration files into the current config
-	// instance
-	ReadConfigFile(filePath string) error
-
-	// EnvVars returns an array of the initialized configuration keys as
-	// key=value strings where the key is configuration key's environment
-	// variable key and the value is the current value for that key.
-	EnvVars() []string
-
-	// AllKeys gets a list of all the keys present in this configuration.
-	AllKeys() []string
-
-	// AllSettings gets a map of this configuration's settings.
-	AllSettings() map[string]interface{}
-}
-
-// config contains the configuration information
-type config struct {
-	v                         *viper.Viper
-	flagSets                  map[string]*flag.FlagSet
-	disableEnvVarSubstitution bool
 }
 
 // scopedConfig is a scoped configuration information
@@ -197,7 +107,7 @@ func SetUserConfigPath(path string) {
 }
 
 // Register registers a new configuration with the config package.
-func Register(r *Registration) {
+func Register(r ConfigRegistration) {
 	registrationsRWL.Lock()
 	defer registrationsRWL.Unlock()
 	registrations = append(registrations, r)
@@ -269,10 +179,6 @@ func (c *scopedConfig) GetScope() string {
 }
 func (c *config) GetScope() string {
 	return ""
-}
-
-func (c *config) FlagSets() map[string]*flag.FlagSet {
-	return c.flagSets
 }
 
 func (c *scopedConfig) Copy() (Config, error) {
@@ -510,11 +416,7 @@ func newConfigWithOptions(
 	loadGlobalConfig, loadUserConfig bool,
 	configName, configType string) *config {
 
-	c := &config{
-		v:                         viper.New(),
-		flagSets:                  map[string]*flag.FlagSet{},
-		disableEnvVarSubstitution: DisableEnvVarSubstitution,
-	}
+	c := newConfigObj()
 
 	log.Debug("initializing configuration")
 
@@ -609,62 +511,10 @@ func (c *config) processRegistrations() {
 	defer registrationsRWL.RUnlock()
 
 	for _, r := range registrations {
-
-		fsn := fmt.Sprintf("%s Flags", r.name)
-		fs, ok := c.flagSets[fsn]
-		if !ok {
-			fs = &flag.FlagSet{}
-			c.flagSets[fsn] = fs
-		}
-
-		for _, k := range r.keys {
-
-			if fs.Lookup(k.flagName) != nil {
-				continue
-			}
-
-			evn := k.envVarName
-
-			if LogRegKey {
-				log.WithFields(log.Fields{
-					"keyName":      k.keyName,
-					"keyType":      k.keyType,
-					"flagName":     k.flagName,
-					"envVar":       evn,
-					"defaultValue": k.defVal,
-					"usage":        k.desc,
-				}).Debug("adding flag")
-			}
-
-			// bind the environment variable
-			c.v.BindEnv(k.keyName, evn)
-
-			if k.short == "" {
-				switch k.keyType {
-				case String, SecureString:
-					fs.String(k.flagName, k.defVal.(string), k.desc)
-				case Int:
-					fs.Int(k.flagName, k.defVal.(int), k.desc)
-				case Bool:
-					fs.Bool(k.flagName, k.defVal.(bool), k.desc)
-				}
-			} else {
-				switch k.keyType {
-				case String, SecureString:
-					fs.StringP(k.flagName, k.short, k.defVal.(string), k.desc)
-				case Int:
-					fs.IntP(k.flagName, k.short, k.defVal.(int), k.desc)
-				case Bool:
-					fs.BoolP(k.flagName, k.short, k.defVal.(bool), k.desc)
-				}
-			}
-
-			c.v.BindPFlag(k.keyName, fs.Lookup(k.flagName))
-		}
-
-		// read the config
-		if r.yaml != "" {
-			c.ReadConfig(bytes.NewReader([]byte(r.yaml)))
+		c.processRegKeys(r)
+		if y := r.YAML(); y != "" {
+			log.Debugf("loading yaml for %s", r.Name())
+			c.ReadConfig(bytes.NewReader([]byte(y)))
 		}
 	}
 }
