@@ -17,6 +17,7 @@ import (
 	"sync"
 
 	log "github.com/Sirupsen/logrus"
+	"github.com/akutz/gofig/types"
 	"github.com/akutz/goof"
 	"github.com/akutz/gotil"
 	yaml "gopkg.in/yaml.v2"
@@ -56,9 +57,9 @@ var (
 	etcDirPath       string
 	usrDirPath       string
 	envVarRx         *regexp.Regexp
-	registrations    []ConfigRegistration
+	registrations    []types.ConfigRegistration
 	registrationsRWL *sync.RWMutex
-	secureKeys       map[string]ConfigRegistrationKey
+	secureKeys       map[string]types.ConfigRegistrationKey
 	secureKeysRWL    *sync.RWMutex
 	prefix           string
 )
@@ -66,7 +67,7 @@ var (
 func init() {
 	envVarRx = regexp.MustCompile(`^\s*([^#=]+?)=(.+)$`)
 	registrationsRWL = &sync.RWMutex{}
-	secureKeys = map[string]ConfigRegistrationKey{}
+	secureKeys = map[string]types.ConfigRegistrationKey{}
 	secureKeysRWL = &sync.RWMutex{}
 	loadEtcEnvironment()
 
@@ -77,12 +78,12 @@ func init() {
 
 // scopedConfig is a scoped configuration information
 type scopedConfig struct {
-	Config
+	types.Config
 	scope string
 }
 
 // FromJSON initializes a new Config instance from a JSON string
-func FromJSON(from string) (Config, error) {
+func FromJSON(from string) (types.Config, error) {
 	c := newConfig()
 	m := map[string]interface{}{}
 	if err := json.Unmarshal([]byte(from), &m); err != nil {
@@ -107,14 +108,14 @@ func SetUserConfigPath(path string) {
 }
 
 // Register registers a new configuration with the config package.
-func Register(r ConfigRegistration) {
+func Register(r types.ConfigRegistration) {
 	registrationsRWL.Lock()
 	defer registrationsRWL.Unlock()
 	registrations = append(registrations, r)
 }
 
-// New initializes a new instance of a Config struct
-func New() Config {
+// New initializes a new instance of a types.Config struct
+func New() types.Config {
 	return newConfig()
 }
 
@@ -122,7 +123,7 @@ func New() Config {
 // options.
 func NewConfig(
 	loadGlobalConfig, loadUserConfig bool,
-	configName, configType string) Config {
+	configName, configType string) types.Config {
 	return newConfigWithOptions(
 		loadGlobalConfig, loadUserConfig, configName, configType)
 }
@@ -131,10 +132,10 @@ func (c *config) DisableEnvVarSubstitution(disable bool) {
 	c.disableEnvVarSubstitution = disable
 }
 
-func (c *scopedConfig) Parent() Config {
+func (c *scopedConfig) Parent() types.Config {
 	return c.Config
 }
-func (c *config) Parent() Config {
+func (c *config) Parent() types.Config {
 	return nil
 }
 
@@ -150,11 +151,11 @@ func toString(i interface{}) string {
 	panic(fmt.Errorf("invalid type=%[1]T,val=%#[1]v", i))
 }
 
-func (c *scopedConfig) Scope(scope interface{}) Config {
+func (c *scopedConfig) Scope(scope interface{}) types.Config {
 	szScope := toString(scope)
 	if log.GetLevel() == log.DebugLevel {
 		scopes := []string{}
-		var p Config = c
+		var p types.Config = c
 		for {
 			scopes = append(scopes, p.GetScope())
 			p = p.Parent()
@@ -169,7 +170,7 @@ func (c *scopedConfig) Scope(scope interface{}) Config {
 	}
 	return &scopedConfig{Config: c, scope: szScope}
 }
-func (c *config) Scope(scope interface{}) Config {
+func (c *config) Scope(scope interface{}) types.Config {
 	szScope := toString(scope)
 	return &scopedConfig{Config: c, scope: szScope}
 }
@@ -181,14 +182,14 @@ func (c *config) GetScope() string {
 	return ""
 }
 
-func (c *scopedConfig) Copy() (Config, error) {
+func (c *scopedConfig) Copy() (types.Config, error) {
 	cc, err := c.Config.Copy()
 	if err != nil {
 		return nil, err
 	}
 	return &scopedConfig{Config: cc, scope: c.scope}, nil
 }
-func (c *config) Copy() (Config, error) {
+func (c *config) Copy() (types.Config, error) {
 	newC := newConfig()
 	m := map[string]interface{}{}
 	c.v.Unmarshal(&m)

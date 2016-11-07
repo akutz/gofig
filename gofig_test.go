@@ -15,6 +15,8 @@ import (
 	"github.com/akutz/gotil"
 	"github.com/stretchr/testify/assert"
 	//jww "github.com/spf13/jwalterweatherman"
+
+	"github.com/akutz/gofig/types"
 )
 
 var (
@@ -58,7 +60,9 @@ func newConfigDirs(testName string, t *testing.T) (string, string) {
 }
 
 func assertConfigEqualToJSON(
-	c1 Config, j2 string, t *testing.T) (Config, Config, bool) {
+	c1 types.Config,
+	j2 string,
+	t *testing.T) (types.Config, types.Config, bool) {
 	var err error
 	var j1 string
 	if j1, err = c1.ToJSON(); err != nil {
@@ -69,7 +73,9 @@ func assertConfigEqualToJSON(
 }
 
 func assertConfigEqualToJSONCompact(
-	c1 Config, j2 string, t *testing.T) (Config, Config, bool) {
+	c1 types.Config,
+	j2 string,
+	t *testing.T) (types.Config, types.Config, bool) {
 	var err error
 	var j1 string
 	if j1, err = c1.ToJSONCompact(); err != nil {
@@ -80,7 +86,7 @@ func assertConfigEqualToJSONCompact(
 }
 
 func assertJSONEqual(
-	j1 string, j2 string, t *testing.T) (Config, Config, bool) {
+	j1 string, j2 string, t *testing.T) (types.Config, types.Config, bool) {
 
 	t.Logf("j1 - %s", j1)
 	t.Log("")
@@ -104,7 +110,7 @@ func assertJSONEqual(
 	return c1, c2, eq
 }
 
-func assertConfigsEqual(c1 Config, c2 Config, t *testing.T) bool {
+func assertConfigsEqual(c1 types.Config, c2 types.Config, t *testing.T) bool {
 
 	printConfig("c1", c1, t)
 	t.Log("")
@@ -533,9 +539,9 @@ func TestScope(t *testing.T) {
 
 func TestKeyNames(t *testing.T) {
 	r := newRegistration("Test Reg 4")
-	r.Key(String, "", "", "", "testReg4.host")
-	r.Key(String, "", "admin", "", "testReg4.userName", "user")
-	r.Key(String, "", "", "", "testReg4.password", "password", "PASSWORD")
+	r.Key(types.String, "", "", "", "testReg4.host")
+	r.Key(types.String, "", "admin", "", "testReg4.userName", "user")
+	r.Key(types.String, "", "", "", "testReg4.password", "password", "PASSWORD")
 	Register(r)
 
 	host := r.keys[0]
@@ -567,9 +573,9 @@ testReg4:
     passphrase: i should be hidden
     passphrase2: i'm okay to show
 `
-	r.Key(SecureString, "", "", "", "testReg4.password")
-	r.Key(SecureString, "", "", "", "testReg4.credentials.passphrase")
-	r.Key(String, "", "", "", "testReg4.credentials.passphrase2")
+	r.Key(types.SecureString, "", "", "", "testReg4.password")
+	r.Key(types.SecureString, "", "", "", "testReg4.credentials.passphrase")
+	r.Key(types.String, "", "", "", "testReg4.credentials.passphrase2")
 	Register(r)
 
 	c := New()
@@ -597,9 +603,9 @@ testReg4:
     passphrase: i should be hidden
     passphrase2: i'm okay to show
 `
-	r.Key(String, "", "", "", "testReg4.password")
-	r.Key(String, "", "", "", "testReg4.credentials.passphrase")
-	r.Key(String, "", "", "", "testReg4.credentials.passphrase2")
+	r.Key(types.String, "", "", "", "testReg4.password")
+	r.Key(types.String, "", "", "", "testReg4.credentials.passphrase")
+	r.Key(types.String, "", "", "", "testReg4.credentials.passphrase2")
 	Register(r)
 
 	c = New()
@@ -684,10 +690,10 @@ func wipeEnv() {
 		k := strings.Split(v, "=")[0]
 		os.Setenv(k, "")
 	}
-	secureKeys = map[string]ConfigRegistrationKey{}
+	secureKeys = map[string]types.ConfigRegistrationKey{}
 }
 
-func printKeys(title string, c Config, t *testing.T) {
+func printKeys(title string, c types.Config, t *testing.T) {
 	for _, k := range c.AllKeys() {
 		if title == "" {
 			t.Logf(k)
@@ -697,7 +703,7 @@ func printKeys(title string, c Config, t *testing.T) {
 	}
 }
 
-func printViperKeys(title string, c Config, t *testing.T) {
+func printViperKeys(title string, c types.Config, t *testing.T) {
 	tc := c.(*config)
 	for _, k := range tc.v.AllKeys() {
 		if title == "" {
@@ -708,7 +714,7 @@ func printViperKeys(title string, c Config, t *testing.T) {
 	}
 }
 
-func printConfig(title string, c Config, t *testing.T) {
+func printConfig(title string, c types.Config, t *testing.T) {
 	for _, k := range c.AllKeys() {
 		if title == "" {
 			t.Logf("%s=%v", k, c.Get(k))
@@ -718,14 +724,14 @@ func printConfig(title string, c Config, t *testing.T) {
 	}
 }
 
-func assertString(t *testing.T, c Config, key, expected string) {
+func assertString(t *testing.T, c types.Config, key, expected string) {
 	v := c.GetString(key)
 	if v != expected {
 		t.Fatalf("%s != %s; == %v", key, expected, v)
 	}
 }
 
-func assertStorageDrivers(t *testing.T, c Config) {
+func assertStorageDrivers(t *testing.T, c types.Config) {
 	sd := c.GetStringSlice("rexray.storageDrivers")
 	if sd == nil {
 		t.Fatalf("storageDrivers == nil")
@@ -744,7 +750,7 @@ func assertStorageDrivers(t *testing.T, c Config) {
 	}
 }
 
-func assertOsDrivers1(t *testing.T, c Config) {
+func assertOsDrivers1(t *testing.T, c types.Config) {
 	od := c.GetStringSlice("rexray.osDrivers")
 	if od == nil {
 		t.Fatalf("osDrivers == nil")
@@ -757,7 +763,7 @@ func assertOsDrivers1(t *testing.T, c Config) {
 	}
 }
 
-func assertOsDrivers2(t *testing.T, c Config) {
+func assertOsDrivers2(t *testing.T, c types.Config) {
 	od := c.GetStringSlice("rexray.osDrivers")
 	if od == nil {
 		t.Fatalf("osDrivers == nil")
@@ -857,9 +863,9 @@ func testReg1() *configReg {
     host: tcp://:7979
     logLevel: warn
 `)
-	r.Key(String, "h", "tcp://:7979",
+	r.Key(types.String, "h", "tcp://:7979",
 		"The REX-Ray host", "rexray.host")
-	r.Key(String, "l", "warn",
+	r.Key(types.String, "l", "warn",
 		"The log level (error, warn, info, debug)", "rexray.logLevel")
 	return r
 }
@@ -874,11 +880,11 @@ func testReg2() *configReg {
     volumeDrivers:
     - docker
 `)
-	r.Key(String, "", "linux",
+	r.Key(types.String, "", "linux",
 		"The OS drivers to consider", "rexray.osDrivers")
-	r.Key(String, "", "libstorage",
+	r.Key(types.String, "", "libstorage",
 		"The storage drivers to consider", "rexray.storageDrivers")
-	r.Key(String, "", "docker",
+	r.Key(types.String, "", "docker",
 		"The volume drivers to consider", "rexray.volumeDrivers")
 	return r
 }
@@ -892,10 +898,10 @@ func testReg3a() *configReg {
         pubKey: MyPubKey
 		PrvKey: MyPrvKey
 `)
-	r.Key(String, "", "admin", "", "testReg3.userName")
-	r.Key(String, "", "", "", "testReg3.password")
-	r.Key(Bool, "", false, "", "testReg3.useCerts")
-	r.Key(String, "", "", "", "testReg3.keyFiles.pubKey")
-	r.Key(String, "", "", "", "testReg3.keyFiles.prvKey")
+	r.Key(types.String, "", "admin", "", "testReg3.userName")
+	r.Key(types.String, "", "", "", "testReg3.password")
+	r.Key(types.Bool, "", false, "", "testReg3.useCerts")
+	r.Key(types.String, "", "", "", "testReg3.keyFiles.pubKey")
+	r.Key(types.String, "", "", "", "testReg3.keyFiles.prvKey")
 	return r
 }
