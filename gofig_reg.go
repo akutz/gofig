@@ -6,61 +6,18 @@ import (
 	"unicode"
 
 	log "github.com/Sirupsen/logrus"
+	"github.com/akutz/gofig/types"
 	"github.com/akutz/goof"
 )
-
-// ConfigRegistration is an interface that describes a configuration
-// registration object.
-type ConfigRegistration interface {
-
-	// Name returns the name of the config registration.
-	Name() string
-
-	// YAML returns the registration's default yaml configuration.
-	YAML() string
-
-	// SetYAML sets the registration's default yaml configuration.
-	SetYAML(y string)
-
-	// Key adds a key to the registration.
-	//
-	// The first vararg argument is the yaml name of the key, using a '.' as
-	// the nested separator. If the second two arguments are omitted they will
-	// be generated from the first argument. The second argument is the explicit
-	// name of the flag bound to this key. The third argument is the explicit
-	// name of the environment variable bound to thie key.
-	Key(
-		keyType int,
-		short string,
-		defVal interface{},
-		description string,
-		keys ...interface{})
-
-	// Keys returns a channel on which a listener can receive the config
-	// registration's keys.
-	Keys() <-chan ConfigRegistrationKey
-}
-
-// ConfigRegistrationKey is an interfact that describes a cofniguration
-// registration key object.
-type ConfigRegistrationKey interface {
-	KeyType() int
-	DefaultValue() interface{}
-	Short() string
-	Description() string
-	KeyName() string
-	FlagName() string
-	EnvVarName() string
-}
 
 type configReg struct {
 	name string
 	yaml string
-	keys []ConfigRegistrationKey
+	keys []types.ConfigRegistrationKey
 }
 
 type configRegKey struct {
-	keyType    int
+	keyType    types.ConfigKeyTypes
 	defVal     interface{}
 	short      string
 	desc       string
@@ -69,36 +26,21 @@ type configRegKey struct {
 	envVarName string
 }
 
-const (
-	// String is a key with a string value
-	String = iota // 0
-
-	// Int is a key with an integer value
-	Int // 1
-
-	// Bool is a key with a boolean value
-	Bool // 2
-
-	// SecureString is a key with a string value that is not included when the
-	// configuration is marshaled to JSON.
-	SecureString // 3
-)
-
 // NewRegistration creates a new registration with the given name.
-func NewRegistration(name string) ConfigRegistration {
+func NewRegistration(name string) types.ConfigRegistration {
 	return newRegistration(name)
 }
 
 func newRegistration(name string) *configReg {
-	return &configReg{name: name, keys: []ConfigRegistrationKey{}}
+	return &configReg{name: name, keys: []types.ConfigRegistrationKey{}}
 }
 
 func (r *configReg) Name() string {
 	return r.name
 }
 
-func (r *configReg) Keys() <-chan ConfigRegistrationKey {
-	c := make(chan ConfigRegistrationKey)
+func (r *configReg) Keys() <-chan types.ConfigRegistrationKey {
+	c := make(chan types.ConfigRegistrationKey)
 	go func() {
 		for _, k := range r.keys {
 			c <- k
@@ -112,7 +54,7 @@ func (r *configReg) YAML() string     { return r.yaml }
 func (r *configReg) SetYAML(y string) { r.yaml = y }
 
 func (r *configReg) Key(
-	keyType int,
+	keyType types.ConfigKeyTypes,
 	short string,
 	defVal interface{},
 	description string,
@@ -131,7 +73,7 @@ func (r *configReg) Key(
 		keyName: toString(keys[0]),
 	}
 
-	if keyType == SecureString {
+	if keyType == types.SecureString {
 		secureKey(rk)
 	}
 
@@ -171,13 +113,13 @@ func (r *configReg) Key(
 	r.keys = append(r.keys, rk)
 }
 
-func (k *configRegKey) KeyType() int              { return k.keyType }
-func (k *configRegKey) DefaultValue() interface{} { return k.defVal }
-func (k *configRegKey) Short() string             { return k.short }
-func (k *configRegKey) Description() string       { return k.desc }
-func (k *configRegKey) KeyName() string           { return k.keyName }
-func (k *configRegKey) FlagName() string          { return k.flagName }
-func (k *configRegKey) EnvVarName() string        { return k.envVarName }
+func (k *configRegKey) KeyType() types.ConfigKeyTypes { return k.keyType }
+func (k *configRegKey) DefaultValue() interface{}     { return k.defVal }
+func (k *configRegKey) Short() string                 { return k.short }
+func (k *configRegKey) Description() string           { return k.desc }
+func (k *configRegKey) KeyName() string               { return k.keyName }
+func (k *configRegKey) FlagName() string              { return k.flagName }
+func (k *configRegKey) EnvVarName() string            { return k.envVarName }
 
 func secureKey(k *configRegKey) {
 	secureKeysRWL.Lock()
