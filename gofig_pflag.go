@@ -63,20 +63,20 @@ func (c *config) processRegKeys(r types.ConfigRegistration) {
 
 		if k.Short() == "" {
 			switch k.KeyType() {
-			case String, SecureString:
+			case types.String, types.SecureString:
 				fs.String(k.FlagName(), k.DefaultValue().(string), k.Description())
-			case Int:
+			case types.Int:
 				fs.Int(k.FlagName(), k.DefaultValue().(int), k.Description())
-			case Bool:
+			case types.Bool:
 				fs.Bool(k.FlagName(), k.DefaultValue().(bool), k.Description())
 			}
 		} else {
 			switch k.KeyType() {
-			case String, SecureString:
+			case types.String, types.SecureString:
 				fs.StringP(k.FlagName(), k.Short(), k.DefaultValue().(string), k.Description())
-			case Int:
+			case types.Int:
 				fs.IntP(k.FlagName(), k.Short(), k.DefaultValue().(int), k.Description())
-			case Bool:
+			case types.Bool:
 				fs.BoolP(k.FlagName(), k.Short(), k.DefaultValue().(bool), k.Description())
 			}
 		}
