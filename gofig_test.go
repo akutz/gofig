@@ -216,6 +216,31 @@ func TestAssertConfigDefaults(t *testing.T) {
 	}
 }
 
+func TestAssertConfigDefaultsRegisterOverride(t *testing.T) {
+	Register(testReg1a())
+	defer func() {
+		Register(testReg1())
+	}()
+
+	newConfigDirs("TestAssertConfigDefaults", t)
+	wipeEnv()
+	c := New()
+
+	osDrivers := c.GetStringSlice("rexray.osDrivers")
+	volDrivers := c.GetStringSlice("rexray.volumeDrivers")
+
+	assertString(t, c, "rexray.host", "tcp://:7980")
+	assertString(t, c, "rexray.logLevel", "warn")
+
+	if len(osDrivers) != 1 || osDrivers[0] != "linux" {
+		t.Fatalf("osDrivers != []string{\"linux\"}, == %v", osDrivers)
+	}
+
+	if len(volDrivers) != 1 || volDrivers[0] != "docker" {
+		t.Fatalf("volumeDrivers != []string{\"docker\"}, == %v", volDrivers)
+	}
+}
+
 func TestAssertTestRegistration(t *testing.T) {
 	newConfigDirs("TestAssertTestRegistration", t)
 	wipeEnv()
@@ -864,6 +889,19 @@ func testReg1() *configReg {
     logLevel: warn
 `)
 	r.Key(types.String, "h", "tcp://:7979",
+		"The REX-Ray host", "rexray.host")
+	r.Key(types.String, "l", "warn",
+		"The log level (error, warn, info, debug)", "rexray.logLevel")
+	return r
+}
+
+func testReg1a() *configReg {
+	r := newRegistration("Global")
+	r.SetYAML(`rexray:
+    host: tcp://:7980
+    logLevel: warn
+`)
+	r.Key(types.String, "h", "tcp://:7980",
 		"The REX-Ray host", "rexray.host")
 	r.Key(types.String, "l", "warn",
 		"The log level (error, warn, info, debug)", "rexray.logLevel")

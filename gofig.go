@@ -111,6 +111,12 @@ func SetUserConfigPath(path string) {
 func Register(r types.ConfigRegistration) {
 	registrationsRWL.Lock()
 	defer registrationsRWL.Unlock()
+	for x, rr := range registrations {
+		if rr.Name() == r.Name() {
+			registrations[x] = r
+			return
+		}
+	}
 	registrations = append(registrations, r)
 }
 
