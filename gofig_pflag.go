@@ -1,5 +1,3 @@
-// +build pflag
-
 package gofig
 
 import (

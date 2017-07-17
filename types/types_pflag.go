@@ -1,5 +1,3 @@
-// +build pflag
-
 package types
 
 import (
